@@ -313,21 +313,25 @@ export const SOCIAL_CHANNELS: SocialChannel[] = [
   {
     id: 'email',
     label: 'Email',
-    url: '',
+    url: 'mailto:sayemquadri0@gmail.com',
+    handle: 'sayemquadri0@gmail.com',
   },
   {
     id: 'github',
     label: 'GitHub',
-    url: '',
+    url: 'https://github.com/sayemquadri',
+    handle: '@sayemquadri',
   },
   {
     id: 'linkedin',
     label: 'LinkedIn',
-    url: '',
+    url: 'https://www.linkedin.com/in/sayemquadri',
+    handle: 'in/sayemquadri',
   },
   {
     id: 'instagram',
     label: 'Instagram',
-    url: '',
+    url: 'https://www.instagram.com/ldksayem',
+    handle: '@ldksayem',
   },
 ];

@@ -51,9 +51,33 @@ test('findProjectById and getAdjacentProjectId handle wrap-around and missing ID
   assert.equal(getAdjacentProjectId([], 'derote', 'next'), null);
 });
 
-test('default SOCIAL_CHANNELS has no fabricated or unconfigured links exposed', () => {
+test('SOCIAL_CHANNELS exposes all configured contact and social profile links', () => {
   const configured = getConfiguredSocialLinks(SOCIAL_CHANNELS);
-  assert.equal(configured.length, 0);
+  assert.deepEqual(
+    configured.map((item) => ({ id: item.id, url: item.url, handle: item.handle })),
+    [
+      {
+        id: 'email',
+        url: 'mailto:sayemquadri0@gmail.com',
+        handle: 'sayemquadri0@gmail.com',
+      },
+      {
+        id: 'github',
+        url: 'https://github.com/sayemquadri',
+        handle: '@sayemquadri',
+      },
+      {
+        id: 'linkedin',
+        url: 'https://www.linkedin.com/in/sayemquadri',
+        handle: 'in/sayemquadri',
+      },
+      {
+        id: 'instagram',
+        url: 'https://www.instagram.com/ldksayem',
+        handle: '@ldksayem',
+      },
+    ],
+  );
 });
 
 test('getConfiguredSocialLinks accepts valid mailto and https URLs and rejects placeholders', () => {
