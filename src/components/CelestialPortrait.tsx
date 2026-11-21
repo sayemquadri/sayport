@@ -43,13 +43,17 @@ const NODE_VERTEX_SHADER = /* glsl */ `
     }
 
     float wave = 0.5 + 0.5 * sin(uTime * 1.25 * aSpeed + aPhase);
-    vFlicker = aKind > 2.5 ? mix(0.65, 1.0, wave) : mix(0.84, 1.0, wave);
+    vFlicker = aKind > 2.5
+      ? mix(0.55, 1.0, wave)
+      : aKind > 1.5
+        ? mix(0.74, 1.0, wave)
+        : mix(0.86, 1.0, wave);
 
     vec4 mvPosition = modelViewMatrix * vec4(pos, 1.0);
     gl_Position = projectionMatrix * mvPosition;
 
     float dist = max(1.2, -mvPosition.z);
-    gl_PointSize = clamp(aSize * uPixelRatio * uScaleFactor * (3.1 / dist), 1.4, 18.0);
+    gl_PointSize = clamp(aSize * uPixelRatio * uScaleFactor * (3.1 / dist), 1.0, 14.0);
   }
 `;
 
@@ -66,18 +70,31 @@ const NODE_FRAGMENT_SHADER = /* glsl */ `
     float d = length(uv);
     if (d > 0.5) discard;
 
-    // Crisp circular vector-style node with gentle anti-aliased edge
-    float disc = vKind < 2.5
-      ? smoothstep(0.46, 0.24, d)
-      : exp(-d * d * 22.0);
-    float ringHalo = vKind < 2.5
-      ? smoothstep(0.5, 0.28, d) * 0.28
-      : 0.0;
+    float alphaFactor;
+    float coreMix;
+    if (vKind < 1.5) {
+      // Primary intersection anchor node: compact crisp circle with tiny soft edge
+      float disc = smoothstep(0.45, 0.22, d);
+      float halo = smoothstep(0.5, 0.28, d) * 0.24;
+      alphaFactor = disc + halo;
+      coreMix = disc * 0.3;
+    } else if (vKind < 2.5) {
+      // Contour micro-star along hair/jaw/collar: tight pinpoint starlight
+      float core = smoothstep(0.4, 0.08, d);
+      float glint = exp(-d * d * 18.0) * 0.45;
+      alphaFactor = core * 0.85 + glint;
+      coreMix = core * 0.45;
+    } else {
+      // Celestial background starfield: crisp astronomical star pinpoint
+      float starCore = exp(-d * d * 16.0);
+      alphaFactor = starCore;
+      coreMix = starCore * 0.42;
+    }
 
-    float alpha = clamp((disc + ringHalo) * vAlpha * vFlicker, 0.0, 1.0) * uReveal;
+    float alpha = clamp(alphaFactor * vAlpha * vFlicker, 0.0, 1.0) * uReveal;
     if (alpha < 0.01) discard;
 
-    vec3 col = mix(vColor, vec3(0.98, 0.99, 1.0), disc * 0.28);
+    vec3 col = mix(vColor, vec3(0.98, 0.99, 1.0), coreMix);
     gl_FragColor = vec4(col, alpha);
   }
 `;
@@ -321,6 +338,30 @@ function renderStaticLineDotDataUrl(data: LineDotPortraitData, size = 930): stri
     }
   }
 
+  // 1b. Distant background starfield drawn behind lines and orbits (kind === 3)
+  for (let i = 0; i < data.pointCount; i++) {
+    if (data.pointKinds[i] < 2.5) continue;
+    const p = projectPerspectivePoint(
+      data.pointPositions[i * 3],
+      data.pointPositions[i * 3 + 1],
+      data.pointPositions[i * 3 + 2],
+      CAMERA_Z,
+      CAMERA_FOV,
+      size,
+    );
+
+    const r = Math.round(data.pointColors[i * 3] * 255);
+    const g = Math.round(data.pointColors[i * 3 + 1] * 255);
+    const b = Math.round(data.pointColors[i * 3 + 2] * 255);
+    const alpha = data.pointAlphas[i];
+    const radius = Math.max(0.55, data.pointSizes[i] * 0.42 * sizeScale * p.scale);
+
+    ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${alpha.toFixed(3)})`;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, radius, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
   // 2. Vector-style portrait line segments
   ctx.lineWidth = Math.max(1.25, size * 0.0022);
   ctx.lineCap = 'round';
@@ -355,8 +396,9 @@ function renderStaticLineDotDataUrl(data: LineDotPortraitData, size = 930): stri
     ctx.stroke();
   }
 
-  // 3. Circular intersection nodes + subtle distant stars
+  // 3. Circular intersection nodes + contour micro-stars (kind < 2.5)
   for (let i = 0; i < data.pointCount; i++) {
+    if (data.pointKinds[i] >= 2.5) continue;
     const p = projectPerspectivePoint(
       data.pointPositions[i * 3],
       data.pointPositions[i * 3 + 1],
@@ -370,7 +412,7 @@ function renderStaticLineDotDataUrl(data: LineDotPortraitData, size = 930): stri
     const g = Math.round(data.pointColors[i * 3 + 1] * 255);
     const b = Math.round(data.pointColors[i * 3 + 2] * 255);
     const alpha = data.pointAlphas[i];
-    const radius = Math.max(0.85, data.pointSizes[i] * 0.56 * sizeScale * p.scale);
+    const radius = Math.max(0.65, data.pointSizes[i] * 0.48 * sizeScale * p.scale);
 
     ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${alpha.toFixed(3)})`;
     ctx.beginPath();

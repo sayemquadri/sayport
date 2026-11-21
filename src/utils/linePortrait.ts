@@ -595,8 +595,18 @@ function buildOrbitalTracks(rng: () => number): OrbitalTrackData[] {
 }
 
 /**
+ * Returns true when normalized coordinates fall over the inner facial features
+ * (eyes, brows, nose, lips) where extra decorative stars must stay off strokes
+ * to keep expression and likeness 100% legible.
+ */
+export function isInnerFeatureZone(u: number, v: number): boolean {
+  return u > 0.34 && u < 0.64 && v > 0.45 && v < 0.715;
+}
+
+/**
  * Reconstructs a clean 3D celestial line-and-dot network portrait directly from
- * the black-on-white vector-style line drawing buffer.
+ * the black-on-white vector-style line drawing buffer, enriched with fine micro-stars
+ * along hair/silhouette/collar contours and a dense astronomical starfield.
  */
 export function buildLineDotPortrait(
   buffer: PortraitImageBuffer,
@@ -633,7 +643,50 @@ export function buildLineDotPortrait(
     alpha: number;
   }
 
+  interface MicroStar {
+    x: number;
+    y: number;
+    z: number;
+    isAccent: boolean;
+    size: number;
+    alpha: number;
+  }
+
   const segments: SegmentEntry[] = [];
+  const microStars: MicroStar[] = [];
+
+  const minNodeDistSq = 0.016 * 0.016;
+  const minMicroDistSq = 0.017 * 0.017;
+
+  const tryAddMicroStar = (u: number, v: number, accentBias: number) => {
+    if (isInnerFeatureZone(u, v)) return;
+
+    const x = (u - 0.5) * scaleX;
+    const y = (0.51 - v) * scaleY;
+
+    for (let i = 0; i < nodes.length; i++) {
+      const dx = x - nodes[i].x;
+      const dy = y - nodes[i].y;
+      if (dx * dx + dy * dy < minNodeDistSq) return;
+    }
+
+    for (let i = 0; i < microStars.length; i++) {
+      const dx = x - microStars[i].x;
+      const dy = y - microStars[i].y;
+      if (dx * dx + dy * dy < minMicroDistSq) return;
+    }
+
+    const z = estimateLinePortraitDepth(u, v) + 0.004;
+    const isAccent = rng() < accentBias;
+    microStars.push({
+      x,
+      y,
+      z,
+      isAccent,
+      size: 1.15 + rng() * 0.95,
+      alpha: 0.8 + rng() * 0.2,
+    });
+  };
 
   for (let pIdx = 0; pIdx < polylines.length; pIdx++) {
     const poly = polylines[pIdx];
@@ -651,6 +704,10 @@ export function buildLineDotPortrait(
 
     const polySeed = rng();
 
+    // Sample delicate constellation micro-stars along hair, jawline, and collar arcs
+    let nextStarArc = Math.min(totalLen * 0.35, 0.006 + rng() * 0.008);
+    const stepArc = 0.015;
+
     for (let i = 0; i < pts.length - 1; i++) {
       const a = pts[i];
       const b = pts[i + 1];
@@ -660,7 +717,7 @@ export function buildLineDotPortrait(
       const isFaceCore =
         midU > 0.28 && midU < 0.70 && midV > 0.43 && midV < 0.76;
       const isCollar = midV >= 0.74;
-      const isAccentStrand = !isFaceCore && rng() < 0.14;
+      const isAccentStrand = !isFaceCore && rng() < 0.16;
 
       let r = 0.86;
       let g = 0.88;
@@ -699,6 +756,19 @@ export function buildLineDotPortrait(
         b: bCol,
         alpha,
       });
+
+      const segStart = arcLengths[i];
+      const segEnd = arcLengths[i + 1];
+      const segLen = segEnd - segStart;
+      if (segLen > 1e-5) {
+        while (nextStarArc <= segEnd) {
+          const frac = clamp01((nextStarArc - segStart) / segLen);
+          const su = a.u + (b.u - a.u) * frac;
+          const sv = a.v + (b.v - a.v) * frac;
+          tryAddMicroStar(su, sv, isAccentStrand ? 0.34 : 0.22);
+          nextStarArc += stepArc + (rng() - 0.5) * 0.005;
+        }
+      }
     }
   }
 
@@ -736,9 +806,9 @@ export function buildLineDotPortrait(
     lineAlphas[a0 + 1] = seg.alpha;
   }
 
-  // 3. Build point buffers from detected circular nodes + sparse quiet distant stars
-  const distantStarCount = 64;
-  const pointCount = nodes.length + distantStarCount;
+  // 3. Build point buffers: refined anchor nodes + contour micro-stars + dense celestial starfield
+  const distantStarCount = 460;
+  const pointCount = nodes.length + microStars.length + distantStarCount;
   const pointPositions = new Float32Array(pointCount * 3);
   const pointColors = new Float32Array(pointCount * 3);
   const pointSizes = new Float32Array(pointCount);
@@ -747,16 +817,17 @@ export function buildLineDotPortrait(
   const pointAlphas = new Float32Array(pointCount);
   const pointKinds = new Float32Array(pointCount);
 
+  // 3a. Primary intersection dots from the artwork (kind = 1), kept compact & crisp
   for (let i = 0; i < nodes.length; i++) {
     const n = nodes[i];
     pointPositions[i * 3] = n.x;
     pointPositions[i * 3 + 1] = n.y;
     pointPositions[i * 3 + 2] = n.z;
 
-    const isAccent = rng() < 0.24;
+    const isAccent = rng() < 0.25;
     if (isAccent) {
-      pointColors[i * 3] = 0.48;
-      pointColors[i * 3 + 1] = 0.68;
+      pointColors[i * 3] = 0.5;
+      pointColors[i * 3 + 1] = 0.7;
       pointColors[i * 3 + 2] = 1.0;
     } else {
       pointColors[i * 3] = 0.96;
@@ -764,31 +835,73 @@ export function buildLineDotPortrait(
       pointColors[i * 3 + 2] = 0.99;
     }
 
-    pointSizes[i] = Math.max(2.9, Math.min(4.8, 2.0 + n.radius * 0.85));
+    pointSizes[i] = Math.max(2.05, Math.min(3.35, 1.45 + n.radius * 0.58));
     pointPhases[i] = rng() * Math.PI * 2;
-    pointSpeeds[i] = 0.6 + rng() * 1.1;
+    pointSpeeds[i] = 0.65 + rng() * 1.1;
     pointAlphas[i] = 0.95;
     pointKinds[i] = 1;
   }
 
-  for (let st = 0; st < distantStarCount; st++) {
-    const idx = nodes.length + st;
-    const angle = rng() * Math.PI * 2;
-    const radius = 0.62 + Math.pow(rng(), 0.7) * 1.15;
-    pointPositions[idx * 3] = Math.cos(angle) * radius;
-    pointPositions[idx * 3 + 1] = Math.sin(angle) * radius;
-    pointPositions[idx * 3 + 2] = -0.45 - rng() * 0.85;
+  // 3b. Small pinpoint constellation stars along hair, jawline, and collar strokes (kind = 2)
+  const microOffset = nodes.length;
+  for (let m = 0; m < microStars.length; m++) {
+    const idx = microOffset + m;
+    const ms = microStars[m];
+    pointPositions[idx * 3] = ms.x;
+    pointPositions[idx * 3 + 1] = ms.y;
+    pointPositions[idx * 3 + 2] = ms.z;
 
-    const isBlue = rng() < 0.18;
-    const lum = 0.45 + rng() * 0.35;
-    pointColors[idx * 3] = isBlue ? 0.52 : lum * 0.9;
-    pointColors[idx * 3 + 1] = isBlue ? 0.7 : lum * 0.92;
-    pointColors[idx * 3 + 2] = isBlue ? 0.98 : lum;
+    if (ms.isAccent) {
+      pointColors[idx * 3] = 0.58;
+      pointColors[idx * 3 + 1] = 0.76;
+      pointColors[idx * 3 + 2] = 1.0;
+    } else {
+      pointColors[idx * 3] = 0.94;
+      pointColors[idx * 3 + 1] = 0.95;
+      pointColors[idx * 3 + 2] = 0.99;
+    }
 
-    pointSizes[idx] = 1.2 + rng() * 1.1;
+    pointSizes[idx] = ms.size;
     pointPhases[idx] = rng() * Math.PI * 2;
-    pointSpeeds[idx] = 0.35 + rng() * 0.85;
-    pointAlphas[idx] = 0.2 + rng() * 0.18;
+    pointSpeeds[idx] = 0.75 + rng() * 1.45;
+    pointAlphas[idx] = ms.alpha;
+    pointKinds[idx] = 2;
+  }
+
+  // 3c. Dense celestial starfield surrounding the portrait (kind = 3), keeping face core clear
+  const starOffset = microOffset + microStars.length;
+  for (let st = 0; st < distantStarCount; st++) {
+    const idx = starOffset + st;
+    const angle = rng() * Math.PI * 2;
+    const isHaloBand = st % 3 === 0;
+    const radius = isHaloBand
+      ? 0.54 + rng() * 0.48
+      : 0.40 + Math.pow(rng(), 0.78) * 0.88;
+    const sx = Math.cos(angle) * radius;
+    const sy = Math.sin(angle) * radius;
+    const sz = -0.30 - rng() * 0.95;
+
+    pointPositions[idx * 3] = sx;
+    pointPositions[idx * 3 + 1] = sy;
+    pointPositions[idx * 3 + 2] = sz;
+
+    const inInnerFaceBox = Math.abs(sx) < 0.30 && sy > -0.28 && sy < 0.14;
+    const isBrightStar = !inInnerFaceBox && rng() < 0.18;
+    const isBlue = rng() < 0.24;
+    const lum = isBrightStar ? 0.88 + rng() * 0.12 : 0.62 + rng() * 0.32;
+
+    pointColors[idx * 3] = isBlue ? 0.56 : lum * 0.93;
+    pointColors[idx * 3 + 1] = isBlue ? 0.75 : lum * 0.95;
+    pointColors[idx * 3 + 2] = isBlue ? 1.0 : lum;
+
+    pointSizes[idx] = isBrightStar ? 1.7 + rng() * 0.6 : 0.9 + rng() * 0.95;
+    pointPhases[idx] = rng() * Math.PI * 2;
+    pointSpeeds[idx] = 0.4 + rng() * 1.1;
+
+    // Taper softly toward outer edge & stay whisper-quiet behind inner face
+    const edgeFade = 1 - smoothstep(0.95, 1.32, radius) * 0.45;
+    const baseAlpha = isBrightStar ? 0.68 + rng() * 0.27 : 0.42 + rng() * 0.34;
+    pointAlphas[idx] = (inInnerFaceBox ? baseAlpha * 0.12 : baseAlpha) * edgeFade;
     pointKinds[idx] = 3;
   }
 

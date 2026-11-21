@@ -5,6 +5,7 @@ import {
   detectDotNodes,
   estimateLinePortraitDepth,
   extractInkMask,
+  isInnerFeatureZone,
   projectPerspectivePoint,
   rotateEulerXYZ,
   thinInkMask,
@@ -99,13 +100,30 @@ describe('linePortrait utilities', () => {
     assert.ok(noseZ > collarZ);
   });
 
-  it('builds deterministic WebGL line/point buffers and orbital tracks', () => {
+  it('protects inner facial features from extra micro-star clutter', () => {
+    assert.equal(isInnerFeatureZone(0.48, 0.54), true); // Eyes / nose core
+    assert.equal(isInnerFeatureZone(0.25, 0.25), false); // Hair curls
+    assert.equal(isInnerFeatureZone(0.50, 0.85), false); // Collar
+  });
+
+  it('builds deterministic WebGL line/point buffers with dense small stars and orbital tracks', () => {
     const buffer = createSyntheticLineDotImage(120);
     const a = buildLineDotPortrait(buffer, 99);
     const b = buildLineDotPortrait(buffer, 99);
 
+    let anchorCount = 0;
+    let microStarCount = 0;
+    let distantStarCount = 0;
+    for (let i = 0; i < a.pointCount; i++) {
+      if (a.pointKinds[i] === 1) anchorCount++;
+      else if (a.pointKinds[i] === 2) microStarCount++;
+      else if (a.pointKinds[i] === 3) distantStarCount++;
+    }
+
     assert.ok(a.segmentCount > 4);
-    assert.equal(a.pointCount, 4 + 64);
+    assert.equal(anchorCount, 4);
+    assert.ok(microStarCount >= 8, 'Expected contour micro-stars along hair/jaw strokes');
+    assert.equal(distantStarCount, 460);
     assert.equal(a.orbitalTracks.length, 2);
     assert.deepEqual(a.linePositions, b.linePositions);
     assert.deepEqual(a.pointPositions, b.pointPositions);
