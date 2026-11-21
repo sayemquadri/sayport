@@ -1,66 +1,64 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 import {
-  buildPortraitConstellation,
+  buildLineDotPortrait,
   projectPerspectivePoint,
   rotateEulerXYZ,
-  type ConstellationData,
-  type PortraitSourceBuffer,
-} from '../utils/constellationPortrait';
+  type LineDotPortraitData,
+  type PortraitImageBuffer,
+} from '../utils/linePortrait';
 
-const PORTRAIT_ASSET_PATH = '/assets/aistudio/Screenshot_2026-06-24_202016_20009026.png';
-const CAMERA_Z = 3.35;
+const PORTRAIT_ASSET_PATH = '/assets/aistudio/image_507f1aba.png';
+const CAMERA_Z = 3.38;
 const CAMERA_FOV = 34;
 
-const PARTICLE_VERTEX_SHADER = /* glsl */ `
+const NODE_VERTEX_SHADER = /* glsl */ `
   attribute vec3 aColor;
   attribute float aSize;
   attribute float aPhase;
   attribute float aSpeed;
+  attribute float aAlpha;
   attribute float aKind;
 
   uniform float uTime;
   uniform float uPixelRatio;
   uniform float uScaleFactor;
-  uniform float uMotion;
 
   varying vec3 vColor;
   varying float vFlicker;
+  varying float vAlpha;
   varying float vKind;
 
   void main() {
     vColor = aColor;
+    vAlpha = aAlpha;
     vKind = aKind;
 
     vec3 pos = position;
 
-    if (uMotion > 0.5) {
-      // Hair & outer nodes drift very subtly; core facial landmarks stay tightly anchored
-      float driftAmp = aKind > 2.5 ? 0.012 : (aKind > 1.5 ? 0.008 : (aKind < 0.5 ? 0.003 : 0.0014));
-      pos.x += sin(uTime * 0.45 * aSpeed + aPhase) * driftAmp;
-      pos.y += cos(uTime * 0.38 * aSpeed + aPhase * 1.37) * driftAmp;
-      pos.z += sin(uTime * 0.32 * aSpeed + aPhase * 0.73) * driftAmp * 0.7;
-
-      float wave = 0.5 + 0.5 * sin(uTime * 1.35 * aSpeed + aPhase);
-      float microShimmer = 0.5 + 0.5 * sin(uTime * 3.1 * aSpeed + aPhase * 2.1);
-      vFlicker = mix(0.72, 1.0, wave * 0.72 + microShimmer * 0.28);
-    } else {
-      vFlicker = 0.94;
+    // Distant background stars drift infinitesimally; portrait intersection nodes stay rock-steady
+    if (aKind > 2.5) {
+      pos.x += sin(uTime * 0.35 * aSpeed + aPhase) * 0.004;
+      pos.y += cos(uTime * 0.31 * aSpeed + aPhase * 1.37) * 0.004;
     }
+
+    float wave = 0.5 + 0.5 * sin(uTime * 1.25 * aSpeed + aPhase);
+    vFlicker = aKind > 2.5 ? mix(0.65, 1.0, wave) : mix(0.84, 1.0, wave);
 
     vec4 mvPosition = modelViewMatrix * vec4(pos, 1.0);
     gl_Position = projectionMatrix * mvPosition;
 
     float dist = max(1.2, -mvPosition.z);
-    gl_PointSize = clamp(aSize * uPixelRatio * uScaleFactor * (3.05 / dist), 1.8, 22.0);
+    gl_PointSize = clamp(aSize * uPixelRatio * uScaleFactor * (3.1 / dist), 1.4, 18.0);
   }
 `;
 
-const PARTICLE_FRAGMENT_SHADER = /* glsl */ `
+const NODE_FRAGMENT_SHADER = /* glsl */ `
   uniform float uReveal;
 
   varying vec3 vColor;
   varying float vFlicker;
+  varying float vAlpha;
   varying float vKind;
 
   void main() {
@@ -68,25 +66,49 @@ const PARTICLE_FRAGMENT_SHADER = /* glsl */ `
     float d = length(uv);
     if (d > 0.5) discard;
 
-    // Crisp pinpoint star core with restrained halo (no cloudy glow)
-    float core = exp(-d * d * 16.0);
-    float softRing = smoothstep(0.48, 0.0, d) * 0.28;
+    // Crisp circular vector-style node with gentle anti-aliased edge
+    float disc = vKind < 2.5
+      ? smoothstep(0.46, 0.24, d)
+      : exp(-d * d * 22.0);
+    float ringHalo = vKind < 2.5
+      ? smoothstep(0.5, 0.28, d) * 0.28
+      : 0.0;
 
-    // Subtle astronomical cross gleam on landmark anchors and satellite nodes
-    float flare = 0.0;
-    if (vKind > 0.5 && vKind < 2.5) {
-      float ax = exp(-abs(uv.x) * 26.0) * exp(-abs(uv.y) * 8.5);
-      float ay = exp(-abs(uv.y) * 26.0) * exp(-abs(uv.x) * 8.5);
-      flare = (ax + ay) * 0.28 * smoothstep(0.5, 0.1, d);
-    }
-
-    float intensity = clamp(core * 1.15 + softRing + flare, 0.0, 1.0) * vFlicker;
-    vec3 finalColor = mix(vColor, vec3(0.97, 0.98, 1.0), core * 0.45);
-
-    float alpha = clamp((core * 1.05 + softRing + flare * 0.72) * vFlicker, 0.0, 1.0) * uReveal;
+    float alpha = clamp((disc + ringHalo) * vAlpha * vFlicker, 0.0, 1.0) * uReveal;
     if (alpha < 0.01) discard;
 
-    gl_FragColor = vec4(finalColor * (0.9 + core * 0.35), alpha * (0.82 + 0.18 * intensity));
+    vec3 col = mix(vColor, vec3(0.98, 0.99, 1.0), disc * 0.28);
+    gl_FragColor = vec4(col, alpha);
+  }
+`;
+
+const SATELLITE_VERTEX_SHADER = /* glsl */ `
+  attribute float aSize;
+  uniform float uPixelRatio;
+  uniform float uScaleFactor;
+
+  void main() {
+    vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+    gl_Position = projectionMatrix * mvPosition;
+    float dist = max(1.2, -mvPosition.z);
+    gl_PointSize = clamp(aSize * uPixelRatio * uScaleFactor * (3.2 / dist), 2.8, 12.0);
+  }
+`;
+
+const SATELLITE_FRAGMENT_SHADER = /* glsl */ `
+  uniform vec3 uColor;
+  uniform float uOpacity;
+
+  void main() {
+    vec2 uv = gl_PointCoord - vec2(0.5);
+    float d = length(uv);
+    if (d > 0.5) discard;
+
+    float core = smoothstep(0.46, 0.16, d);
+    float alpha = core * uOpacity;
+    if (alpha < 0.01) discard;
+
+    gl_FragColor = vec4(mix(uColor, vec3(0.98, 0.99, 1.0), core * 0.4), alpha);
   }
 `;
 
@@ -113,7 +135,6 @@ const LINE_VERTEX_SHADER = /* glsl */ `
 
 const LINE_FRAGMENT_SHADER = /* glsl */ `
   uniform float uTime;
-  uniform float uMotion;
   uniform float uReveal;
 
   varying vec3 vColor;
@@ -125,21 +146,19 @@ const LINE_FRAGMENT_SHADER = /* glsl */ `
     float alpha = vAlpha;
     vec3 col = vColor;
 
-    if (uMotion > 0.5) {
-      // Sparse travelling light pulse along selected constellation edges
-      float cycle = fract(uTime * 0.16 + vSeed * 17.31);
-      if (cycle < 0.24) {
-        float pulsePos = cycle / 0.24;
-        float dist = abs(vProgress - pulsePos);
-        float pulse = exp(-dist * dist * 58.0);
-        float endFade = smoothstep(0.0, 0.12, pulsePos) * smoothstep(1.0, 0.88, pulsePos);
-        float energy = pulse * endFade;
-        col = mix(col, vec3(0.56, 0.74, 1.0), energy * 0.75);
-        alpha += energy * 0.46;
-      }
+    // Gentle luminous pulse gliding along traced hair, jawline, and collar strokes
+    float cycle = fract(uTime * 0.13 + vSeed * 17.19);
+    if (cycle < 0.20) {
+      float pulsePos = cycle / 0.20;
+      float dist = abs(vProgress - pulsePos);
+      float pulse = exp(-dist * dist * 52.0);
+      float endFade = smoothstep(0.0, 0.12, pulsePos) * smoothstep(1.0, 0.88, pulsePos);
+      float energy = pulse * endFade;
+      col = mix(col, vec3(0.58, 0.78, 1.0), energy * 0.75);
+      alpha += energy * 0.28;
     }
 
-    gl_FragColor = vec4(col, clamp(alpha, 0.0, 0.78) * uReveal);
+    gl_FragColor = vec4(col, clamp(alpha, 0.0, 0.98) * uReveal);
   }
 `;
 
@@ -173,7 +192,6 @@ function scheduleAnimationFrame(
     return () => window.cancelAnimationFrame(id);
   }
 
-  // On software rasterizers (e.g., SwiftShader), fence completion before queuing the next rAF
   let cancelled = false;
   let timerId = 0;
   let rafId = 0;
@@ -225,37 +243,34 @@ function scheduleAnimationFrame(
   };
 }
 
-function sampleImageToBuffer(img: HTMLImageElement): PortraitSourceBuffer {
-  const aspect = img.naturalWidth > 0 && img.naturalHeight > 0
-    ? img.naturalWidth / img.naturalHeight
-    : 0.78;
-  const targetWidth = 172;
-  const targetHeight = Math.max(96, Math.round(targetWidth / aspect));
-
+function sampleImageToBuffer(img: HTMLImageElement): PortraitImageBuffer {
+  const targetSize = 400;
   const offscreen = document.createElement('canvas');
-  offscreen.width = targetWidth;
-  offscreen.height = targetHeight;
+  offscreen.width = targetSize;
+  offscreen.height = targetSize;
 
   const ctx = offscreen.getContext('2d', { willReadFrequently: true });
   if (!ctx) {
     return { width: 0, height: 0, data: new Uint8ClampedArray(0) };
   }
 
-  ctx.drawImage(img, 0, 0, targetWidth, targetHeight);
-  const imageData = ctx.getImageData(0, 0, targetWidth, targetHeight);
+  ctx.fillStyle = '#FFFFFF';
+  ctx.fillRect(0, 0, targetSize, targetSize);
+  ctx.drawImage(img, 0, 0, targetSize, targetSize);
+  const imageData = ctx.getImageData(0, 0, targetSize, targetSize);
 
   return {
-    width: targetWidth,
-    height: targetHeight,
+    width: targetSize,
+    height: targetSize,
     data: imageData.data,
   };
 }
 
 /**
- * Rasterizes a crisp static PNG data URL of the celestial constellation portrait
+ * Rasterizes a crisp static high-DPI PNG data URL of the line-and-dot network portrait
  * for reduced-motion preferences or environments without WebGL.
  */
-function renderStaticConstellationDataUrl(data: ConstellationData, size = 930): string {
+function renderStaticLineDotDataUrl(data: LineDotPortraitData, size = 930): string {
   const offscreen = document.createElement('canvas');
   offscreen.width = size;
   offscreen.height = size;
@@ -264,24 +279,25 @@ function renderStaticConstellationDataUrl(data: ConstellationData, size = 930): 
   if (!ctx) return '';
 
   ctx.clearRect(0, 0, size, size);
+  const sizeScale = size / 465;
 
-  // 1. Perspective-projected tilted orbital rings
-  for (const ring of data.orbitalRings) {
-    ctx.strokeStyle = ring.isAccent
-      ? 'rgba(78, 126, 255, 0.24)'
-      : 'rgba(59, 64, 80, 0.16)';
-    ctx.lineWidth = Math.max(1, size * 0.0014);
+  // 1. Subtle elliptical orbital paths & satellite nodes
+  for (const track of data.orbitalTracks) {
+    ctx.strokeStyle = track.isAccent
+      ? 'rgba(78, 126, 255, 0.19)'
+      : 'rgba(66, 74, 94, 0.14)';
+    ctx.lineWidth = Math.max(1, size * 0.0012);
     ctx.beginPath();
 
-    const count = ring.points.length / 3;
+    const count = track.points.length / 3;
     for (let i = 0; i < count; i++) {
       const [rx, ry, rz] = rotateEulerXYZ(
-        ring.points[i * 3],
-        ring.points[i * 3 + 1],
-        ring.points[i * 3 + 2],
-        ring.tiltX,
-        ring.tiltY,
-        ring.tiltZ,
+        track.points[i * 3],
+        track.points[i * 3 + 1],
+        track.points[i * 3 + 2],
+        track.tiltX,
+        track.tiltY,
+        track.tiltZ,
       );
       const p = projectPerspectivePoint(rx, ry, rz, CAMERA_Z, CAMERA_FOV, size);
       if (i === 0) ctx.moveTo(p.x, p.y);
@@ -289,10 +305,25 @@ function renderStaticConstellationDataUrl(data: ConstellationData, size = 930): 
     }
     ctx.closePath();
     ctx.stroke();
+
+    for (const sat of track.satellites) {
+      const lx = Math.cos(sat.phase) * track.radiusX;
+      const ly = Math.sin(sat.phase) * track.radiusY;
+      const [rx, ry, rz] = rotateEulerXYZ(lx, ly, 0, track.tiltX, track.tiltY, track.tiltZ);
+      const p = projectPerspectivePoint(rx, ry, rz, CAMERA_Z, CAMERA_FOV, size);
+
+      ctx.fillStyle = sat.isAccent
+        ? 'rgba(118, 166, 255, 0.92)'
+        : 'rgba(236, 238, 246, 0.88)';
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, sat.size * 0.55 * sizeScale, 0, Math.PI * 2);
+      ctx.fill();
+    }
   }
 
-  // 2. Constellation connecting segments
-  ctx.lineWidth = Math.max(0.85, size * 0.0012);
+  // 2. Vector-style portrait line segments
+  ctx.lineWidth = Math.max(1.25, size * 0.0022);
+  ctx.lineCap = 'round';
   for (let i = 0; i < data.segmentCount; i++) {
     const v = i * 6;
     const p1 = projectPerspectivePoint(
@@ -324,8 +355,7 @@ function renderStaticConstellationDataUrl(data: ConstellationData, size = 930): 
     ctx.stroke();
   }
 
-  // 3. Pinpoint stars & facial relief points
-  const sizeScale = size / 465;
+  // 3. Circular intersection nodes + subtle distant stars
   for (let i = 0; i < data.pointCount; i++) {
     const p = projectPerspectivePoint(
       data.pointPositions[i * 3],
@@ -339,9 +369,10 @@ function renderStaticConstellationDataUrl(data: ConstellationData, size = 930): 
     const r = Math.round(data.pointColors[i * 3] * 255);
     const g = Math.round(data.pointColors[i * 3 + 1] * 255);
     const b = Math.round(data.pointColors[i * 3 + 2] * 255);
-    const radius = Math.max(0.75, data.pointSizes[i] * 0.42 * sizeScale * (p.scale / 1.0));
+    const alpha = data.pointAlphas[i];
+    const radius = Math.max(0.85, data.pointSizes[i] * 0.56 * sizeScale * p.scale);
 
-    ctx.fillStyle = `rgba(${r}, ${g}, ${b}, 0.88)`;
+    ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${alpha.toFixed(3)})`;
     ctx.beginPath();
     ctx.arc(p.x, p.y, radius, 0, Math.PI * 2);
     ctx.fill();
@@ -354,7 +385,7 @@ export function CelestialPortrait() {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mountRef = useRef<HTMLDivElement | null>(null);
 
-  const [constellation, setConstellation] = useState<ConstellationData | null>(null);
+  const [portraitData, setPortraitData] = useState<LineDotPortraitData | null>(null);
   const [prefersReducedMotion, setPrefersReducedMotion] = useState<boolean>(() =>
     typeof window !== 'undefined'
       ? window.matchMedia('(prefers-reduced-motion: reduce)').matches
@@ -377,7 +408,7 @@ export function CelestialPortrait() {
     };
   }, []);
 
-  // Load and sample the local reference photograph purely on the client
+  // Load and trace the line-and-dot artwork strictly in-browser
   useEffect(() => {
     let active = true;
     const img = new Image();
@@ -387,14 +418,8 @@ export function CelestialPortrait() {
       if (!active) return;
       const buffer = sampleImageToBuffer(img);
       if (buffer.width > 0 && buffer.height > 0) {
-        const built = buildPortraitConstellation(buffer, {
-          seed: 20260624,
-          maxPortraitPoints: 4400,
-          maxAnchorNodes: 320,
-          distantStarCount: 130,
-          satelliteCount: 14,
-        });
-        setConstellation(built);
+        const built = buildLineDotPortrait(buffer, 20261121);
+        setPortraitData(built);
       }
     };
 
@@ -407,15 +432,14 @@ export function CelestialPortrait() {
 
   const showStaticFallback = prefersReducedMotion || webglUnavailable;
 
-  // Build static fallback PNG strictly when needed (reduced motion or WebGL unavailable)
   const staticFallbackUrl = useMemo(() => {
-    if (!showStaticFallback || !constellation) return '';
-    return renderStaticConstellationDataUrl(constellation, 930);
-  }, [showStaticFallback, constellation]);
+    if (!showStaticFallback || !portraitData) return '';
+    return renderStaticLineDotDataUrl(portraitData, 930);
+  }, [showStaticFallback, portraitData]);
 
-  // Hardware-accelerated Three.js renderer with IntersectionObserver viewport gating
+  // Hardware-accelerated Three.js renderer with IntersectionObserver offscreen pause
   useEffect(() => {
-    if (!constellation || showStaticFallback) return;
+    if (!portraitData || showStaticFallback) return;
 
     const containerEl = containerRef.current;
     const mountEl = mountRef.current;
@@ -450,7 +474,7 @@ export function CelestialPortrait() {
 
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(CAMERA_FOV, 1, 0.1, 20);
-    camera.position.set(0, 0.02, CAMERA_Z);
+    camera.position.set(0, 0.0, CAMERA_Z);
 
     const rootGroup = new THREE.Group();
     scene.add(rootGroup);
@@ -458,79 +482,31 @@ export function CelestialPortrait() {
     const portraitGroup = new THREE.Group();
     rootGroup.add(portraitGroup);
 
-    // Points geometry + custom shader
-    const pointsGeometry = new THREE.BufferGeometry();
-    pointsGeometry.setAttribute(
-      'position',
-      new THREE.BufferAttribute(constellation.pointPositions, 3),
-    );
-    pointsGeometry.setAttribute(
-      'aColor',
-      new THREE.BufferAttribute(constellation.pointColors, 3),
-    );
-    pointsGeometry.setAttribute(
-      'aSize',
-      new THREE.BufferAttribute(constellation.pointSizes, 1),
-    );
-    pointsGeometry.setAttribute(
-      'aPhase',
-      new THREE.BufferAttribute(constellation.pointPhases, 1),
-    );
-    pointsGeometry.setAttribute(
-      'aSpeed',
-      new THREE.BufferAttribute(constellation.pointSpeeds, 1),
-    );
-    pointsGeometry.setAttribute(
-      'aKind',
-      new THREE.BufferAttribute(constellation.pointKinds, 1),
-    );
-
-    const pointsUniforms = {
-      uTime: { value: 0 },
-      uPixelRatio: { value: pixelRatio },
-      uScaleFactor: { value: 1.0 },
-      uMotion: { value: 1.0 },
-      uReveal: { value: 0.0 },
-    };
-
-    const pointsMaterial = new THREE.ShaderMaterial({
-      uniforms: pointsUniforms,
-      vertexShader: PARTICLE_VERTEX_SHADER,
-      fragmentShader: PARTICLE_FRAGMENT_SHADER,
-      transparent: true,
-      depthWrite: false,
-      blending: THREE.NormalBlending,
-    });
-
-    const pointsMesh = new THREE.Points(pointsGeometry, pointsMaterial);
-    portraitGroup.add(pointsMesh);
-
-    // Constellation lines geometry + custom pulse shader
+    // 1. Traced line-art segments with travelling pulses
     const linesGeometry = new THREE.BufferGeometry();
     linesGeometry.setAttribute(
       'position',
-      new THREE.BufferAttribute(constellation.linePositions, 3),
+      new THREE.BufferAttribute(portraitData.linePositions, 3),
     );
     linesGeometry.setAttribute(
       'aColor',
-      new THREE.BufferAttribute(constellation.lineColors, 3),
+      new THREE.BufferAttribute(portraitData.lineColors, 3),
     );
     linesGeometry.setAttribute(
       'aProgress',
-      new THREE.BufferAttribute(constellation.lineProgress, 1),
+      new THREE.BufferAttribute(portraitData.lineProgress, 1),
     );
     linesGeometry.setAttribute(
       'aSeed',
-      new THREE.BufferAttribute(constellation.lineSeeds, 1),
+      new THREE.BufferAttribute(portraitData.lineSeeds, 1),
     );
     linesGeometry.setAttribute(
       'aAlpha',
-      new THREE.BufferAttribute(constellation.lineAlphas, 1),
+      new THREE.BufferAttribute(portraitData.lineAlphas, 1),
     );
 
     const linesUniforms = {
       uTime: { value: 0 },
-      uMotion: { value: 1.0 },
       uReveal: { value: 0.0 },
     };
 
@@ -546,44 +522,141 @@ export function CelestialPortrait() {
     const linesMesh = new THREE.LineSegments(linesGeometry, linesMaterial);
     portraitGroup.add(linesMesh);
 
-    // Minimalist elliptical orbital rings around the portrait
+    // 2. Extracted circular dot nodes & distant subtle stars
+    const pointsGeometry = new THREE.BufferGeometry();
+    pointsGeometry.setAttribute(
+      'position',
+      new THREE.BufferAttribute(portraitData.pointPositions, 3),
+    );
+    pointsGeometry.setAttribute(
+      'aColor',
+      new THREE.BufferAttribute(portraitData.pointColors, 3),
+    );
+    pointsGeometry.setAttribute(
+      'aSize',
+      new THREE.BufferAttribute(portraitData.pointSizes, 1),
+    );
+    pointsGeometry.setAttribute(
+      'aPhase',
+      new THREE.BufferAttribute(portraitData.pointPhases, 1),
+    );
+    pointsGeometry.setAttribute(
+      'aSpeed',
+      new THREE.BufferAttribute(portraitData.pointSpeeds, 1),
+    );
+    pointsGeometry.setAttribute(
+      'aAlpha',
+      new THREE.BufferAttribute(portraitData.pointAlphas, 1),
+    );
+    pointsGeometry.setAttribute(
+      'aKind',
+      new THREE.BufferAttribute(portraitData.pointKinds, 1),
+    );
+
+    const pointsUniforms = {
+      uTime: { value: 0 },
+      uPixelRatio: { value: pixelRatio },
+      uScaleFactor: { value: 1.0 },
+      uReveal: { value: 0.0 },
+    };
+
+    const pointsMaterial = new THREE.ShaderMaterial({
+      uniforms: pointsUniforms,
+      vertexShader: NODE_VERTEX_SHADER,
+      fragmentShader: NODE_FRAGMENT_SHADER,
+      transparent: true,
+      depthWrite: false,
+      blending: THREE.NormalBlending,
+    });
+
+    const pointsMesh = new THREE.Points(pointsGeometry, pointsMaterial);
+    portraitGroup.add(pointsMesh);
+
+    // 3. Visually separated elliptical orbital trajectories + travelling satellites
     const orbitGroup = new THREE.Group();
     rootGroup.add(orbitGroup);
 
-    const ringDisposables: Array<{
+    const orbitalTrackState: Array<{
       geom: THREE.BufferGeometry;
       mat: THREE.LineBasicMaterial;
-      loop: THREE.LineLoop;
-      speed: number;
       baseOpacity: number;
+      satellites: Array<{
+        geom: THREE.BufferGeometry;
+        mat: THREE.ShaderMaterial;
+        mesh: THREE.Points;
+        radiusX: number;
+        radiusY: number;
+        phase: number;
+        speed: number;
+        baseOpacity: number;
+      }>;
     }> = [];
 
-    for (const ring of constellation.orbitalRings) {
-      const ringGeom = new THREE.BufferGeometry();
-      ringGeom.setAttribute('position', new THREE.BufferAttribute(ring.points, 3));
+    for (const track of portraitData.orbitalTracks) {
+      const trackGroup = new THREE.Group();
+      trackGroup.rotation.set(track.tiltX, track.tiltY, track.tiltZ);
+      orbitGroup.add(trackGroup);
 
-      const baseOpacity = ring.isAccent ? 0.24 : 0.16;
-      const ringMat = new THREE.LineBasicMaterial({
-        color: ring.isAccent ? 0x4e7eff : 0x3b4050,
+      const trackGeom = new THREE.BufferGeometry();
+      trackGeom.setAttribute('position', new THREE.BufferAttribute(track.points, 3));
+
+      const baseOpacity = track.isAccent ? 0.19 : 0.13;
+      const trackMat = new THREE.LineBasicMaterial({
+        color: track.isAccent ? 0x4e7eff : 0x424a5e,
         transparent: true,
         opacity: 0,
         depthWrite: false,
       });
 
-      const loop = new THREE.LineLoop(ringGeom, ringMat);
-      loop.rotation.set(ring.tiltX, ring.tiltY, ring.tiltZ);
-      orbitGroup.add(loop);
+      const loop = new THREE.LineLoop(trackGeom, trackMat);
+      trackGroup.add(loop);
 
-      ringDisposables.push({
-        geom: ringGeom,
-        mat: ringMat,
-        loop,
-        speed: ring.speed,
+      const satStates = track.satellites.map((sat) => {
+        const satGeom = new THREE.BufferGeometry();
+        satGeom.setAttribute('position', new THREE.BufferAttribute(new Float32Array([0, 0, 0]), 3));
+        satGeom.setAttribute('aSize', new THREE.BufferAttribute(new Float32Array([sat.size]), 1));
+
+        const satMat = new THREE.ShaderMaterial({
+          uniforms: {
+            uPixelRatio: { value: pixelRatio },
+            uScaleFactor: pointsUniforms.uScaleFactor,
+            uColor: { value: new THREE.Color(sat.isAccent ? 0x6ea0ff : 0xe8ecf6) },
+            uOpacity: { value: 0 },
+          },
+          vertexShader: SATELLITE_VERTEX_SHADER,
+          fragmentShader: SATELLITE_FRAGMENT_SHADER,
+          transparent: true,
+          depthWrite: false,
+        });
+
+        const mesh = new THREE.Points(satGeom, satMat);
+        mesh.position.set(
+          Math.cos(sat.phase) * track.radiusX,
+          Math.sin(sat.phase) * track.radiusY,
+          0,
+        );
+        trackGroup.add(mesh);
+
+        return {
+          geom: satGeom,
+          mat: satMat,
+          mesh,
+          radiusX: track.radiusX,
+          radiusY: track.radiusY,
+          phase: sat.phase,
+          speed: sat.speed,
+          baseOpacity: sat.isAccent ? 0.92 : 0.86,
+        };
+      });
+
+      orbitalTrackState.push({
+        geom: trackGeom,
+        mat: trackMat,
         baseOpacity,
+        satellites: satStates,
       });
     }
 
-    // Cache document-space center & bounds during resize so pointermove never forces layout reflow
     let cachedDocCenterX = 0;
     let cachedDocCenterY = 0;
     let cachedWidth = 360;
@@ -637,8 +710,8 @@ export function CelestialPortrait() {
       const clampedX = Math.max(-1, Math.min(1, nx));
       const clampedY = Math.max(-1, Math.min(1, ny));
 
-      targetRotY = clampedX * 0.14;
-      targetRotX = -clampedY * 0.085;
+      targetRotY = clampedX * 0.13;
+      targetRotX = -clampedY * 0.08;
     };
 
     const handlePointerLeave = () => {
@@ -659,8 +732,8 @@ export function CelestialPortrait() {
       linesUniforms.uTime.value = elapsed;
       linesUniforms.uReveal.value = easedReveal;
 
-      const ambientYaw = Math.sin(elapsed * 0.24) * 0.045;
-      const ambientPitch = Math.cos(elapsed * 0.19) * 0.02;
+      const ambientYaw = Math.sin(elapsed * 0.24) * 0.04;
+      const ambientPitch = Math.cos(elapsed * 0.19) * 0.018;
 
       currentRotX = THREE.MathUtils.damp(currentRotX, targetRotX + ambientPitch, 4.5, dt);
       currentRotY = THREE.MathUtils.damp(currentRotY, targetRotY + ambientYaw, 4.5, dt);
@@ -668,9 +741,17 @@ export function CelestialPortrait() {
       rootGroup.rotation.x = currentRotX;
       rootGroup.rotation.y = currentRotY;
 
-      for (const ring of ringDisposables) {
-        ring.loop.rotation.z += ring.speed * dt;
-        ring.mat.opacity = ring.baseOpacity * easedReveal;
+      for (const track of orbitalTrackState) {
+        track.mat.opacity = track.baseOpacity * easedReveal;
+        for (const sat of track.satellites) {
+          const angle = sat.phase + elapsed * sat.speed;
+          sat.mesh.position.set(
+            Math.cos(angle) * sat.radiusX,
+            Math.sin(angle) * sat.radiusY,
+            0,
+          );
+          sat.mat.uniforms.uOpacity.value = sat.baseOpacity * easedReveal;
+        }
       }
 
       renderer.render(scene, camera);
@@ -705,7 +786,6 @@ export function CelestialPortrait() {
       cancelNextFrame = scheduleAnimationFrame(renderer, isSoftwareGl, tick);
     };
 
-    // Pause WebGL loop automatically whenever Hero scrolls out of view so scroll stays effortless
     const intersectionObserver = new IntersectionObserver(
       (entries) => {
         const entry = entries[0];
@@ -749,7 +829,6 @@ export function CelestialPortrait() {
     renderer.domElement.addEventListener('webglcontextlost', handleContextLost);
     renderer.domElement.addEventListener('webglcontextrestored', handleContextRestored);
 
-    // Draw initial frame synchronously, then advance smoothly via requestAnimationFrame
     renderFrame(0.016);
     resumeLoop();
 
@@ -768,14 +847,18 @@ export function CelestialPortrait() {
       pointsMaterial.dispose();
       linesGeometry.dispose();
       linesMaterial.dispose();
-      for (const ring of ringDisposables) {
-        ring.geom.dispose();
-        ring.mat.dispose();
+      for (const track of orbitalTrackState) {
+        track.geom.dispose();
+        track.mat.dispose();
+        for (const sat of track.satellites) {
+          sat.geom.dispose();
+          sat.mat.dispose();
+        }
       }
       renderer.dispose();
       mountEl.replaceChildren();
     };
-  }, [constellation, showStaticFallback]);
+  }, [portraitData, showStaticFallback]);
 
   return (
     <div
@@ -785,9 +868,9 @@ export function CelestialPortrait() {
       aria-hidden="true"
       className="relative h-[330px] w-[330px] max-w-full shrink-0 select-none [contain:layout_paint] [transform:translateZ(0)] sm:h-[390px] sm:w-[390px] lg:h-[465px] lg:w-[465px]"
     >
-      {/* Fixed concentric architectural rings prevent visual shift while portrait loads */}
-      <div className="pointer-events-none absolute inset-4 rounded-full border border-[#27272C]/55" />
-      <div className="pointer-events-none absolute inset-10 rounded-full border border-[#27272C]/30" />
+      {/* Minimalist concentric hairline framing */}
+      <div className="pointer-events-none absolute inset-4 rounded-full border border-[#27272C]/45" />
+      <div className="pointer-events-none absolute inset-11 rounded-full border border-[#27272C]/25" />
 
       {showStaticFallback ? (
         staticFallbackUrl ? (
