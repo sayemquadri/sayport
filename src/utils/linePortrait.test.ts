@@ -54,7 +54,7 @@ function createSyntheticLineDotImage(size = 120): PortraitImageBuffer {
   drawLine(32, 68, 50, 86);
   drawLine(50, 86, 68, 86);
   drawLine(68, 86, 86, 68);
-  drawLine(40, 56, 54, 56); // Brow-like horizontal stroke
+  drawLine(40, 56, 54, 56);
 
   // Elongated thick horizontal bar (simulates eyebrow — must NOT trigger circular dot detector)
   for (let y = 55; y <= 57; y++) {
@@ -75,7 +75,7 @@ function createSyntheticLineDotImage(size = 120): PortraitImageBuffer {
 describe('linePortrait utilities', () => {
   it('separates circular intersection dots from thin strokes and elongated eyebrow bars', () => {
     const buffer = createSyntheticLineDotImage(120);
-    const mask = extractInkMask(buffer, 0.32);
+    const mask = extractInkMask(buffer, 0.28);
     const nodes = detectDotNodes(mask, buffer.width, buffer.height);
 
     assert.equal(nodes.length, 4, 'Expected exactly the 4 circular dot nodes');
@@ -83,7 +83,7 @@ describe('linePortrait utilities', () => {
 
   it('thins ink strokes to a connected 1px skeleton and traces simplified polylines', () => {
     const buffer = createSyntheticLineDotImage(120);
-    const mask = extractInkMask(buffer, 0.32);
+    const mask = extractInkMask(buffer, 0.28);
     const skeleton = thinInkMask(mask, buffer.width, buffer.height);
     const polylines = traceSkeletonPolylines(skeleton, buffer.width, buffer.height);
 
@@ -93,22 +93,50 @@ describe('linePortrait utilities', () => {
     }
   });
 
-  it('orders 3D line portrait depth forward at nose/brows relative to collar', () => {
-    const noseZ = estimateLinePortraitDepth(0.485, 0.58);
-    const collarZ = estimateLinePortraitDepth(0.5, 0.92);
-    assert.ok(noseZ > collarZ);
+  it('assigns shallow 3D Z-planes separating facial features, contour, and collar without extreme anatomical depth', () => {
+    const faceFeaturesZ = estimateLinePortraitDepth(0.49, 0.56);
+    const contourZ = estimateLinePortraitDepth(0.30, 0.62);
+    const collarZ = estimateLinePortraitDepth(0.50, 0.90);
+
+    assert.ok(faceFeaturesZ > contourZ, 'Facial features plane sits gently ahead of contour');
+    assert.ok(contourZ > collarZ, 'Contour sits gently ahead of collar/shoulders');
+    assert.ok(faceFeaturesZ - collarZ < 0.20, 'Depth separation must stay shallow to preserve 2D composition');
   });
 
-  it('builds deterministic WebGL line/point buffers and orbital tracks', () => {
+  it('builds deterministic WebGL buffers with dominant dot nodes, secondary path particles, faint stars, and orbiting satellites', () => {
     const buffer = createSyntheticLineDotImage(120);
     const a = buildLineDotPortrait(buffer, 99);
     const b = buildLineDotPortrait(buffer, 99);
 
     assert.ok(a.segmentCount > 4);
-    assert.equal(a.pointCount, 4 + 64);
+    assert.ok(a.pointCount >= 4 + 84, 'Includes primary nodes, secondary path particles, and distant stars');
     assert.equal(a.orbitalTracks.length, 2);
     assert.deepEqual(a.linePositions, b.linePositions);
     assert.deepEqual(a.pointPositions, b.pointPositions);
+
+    let primaryCount = 0;
+    let secondaryCount = 0;
+    let distantCount = 0;
+    let maxPrimarySize = 0;
+    let maxSecondarySize = 0;
+
+    for (let i = 0; i < a.pointCount; i++) {
+      const kind = a.pointKinds[i];
+      if (kind === 1) {
+        primaryCount++;
+        maxPrimarySize = Math.max(maxPrimarySize, a.pointSizes[i]);
+      } else if (kind === 2) {
+        secondaryCount++;
+        maxSecondarySize = Math.max(maxSecondarySize, a.pointSizes[i]);
+      } else if (kind === 3) {
+        distantCount++;
+      }
+    }
+
+    assert.equal(primaryCount, 4);
+    assert.ok(secondaryCount > 0, 'Expected tiny secondary particles along traced paths');
+    assert.equal(distantCount, 84);
+    assert.ok(maxPrimarySize > maxSecondarySize, 'Original dot nodes must remain visually dominant');
 
     for (let i = 0; i < a.linePositions.length; i++) {
       assert.ok(Number.isFinite(a.linePositions[i]));

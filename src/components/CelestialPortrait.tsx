@@ -8,7 +8,7 @@ import {
   type PortraitImageBuffer,
 } from '../utils/linePortrait';
 
-const PORTRAIT_ASSET_PATH = '/assets/aistudio/image_507f1aba.png';
+const PORTRAIT_ASSET_PATH = '/assets/aistudio/image_1dc1ebb0.png';
 const CAMERA_Z = 3.38;
 const CAMERA_FOV = 34;
 
@@ -23,11 +23,14 @@ const NODE_VERTEX_SHADER = /* glsl */ `
   uniform float uTime;
   uniform float uPixelRatio;
   uniform float uScaleFactor;
+  uniform vec2 uHoverXY;
+  uniform float uHoverActive;
 
   varying vec3 vColor;
   varying float vFlicker;
   varying float vAlpha;
   varying float vKind;
+  varying float vHoverGlow;
 
   void main() {
     vColor = aColor;
@@ -36,20 +39,32 @@ const NODE_VERTEX_SHADER = /* glsl */ `
 
     vec3 pos = position;
 
-    // Distant background stars drift infinitesimally; portrait intersection nodes stay rock-steady
+    // Faint background stars drift infinitesimally; portrait nodes & path particles stay anchored
     if (aKind > 2.5) {
-      pos.x += sin(uTime * 0.35 * aSpeed + aPhase) * 0.004;
-      pos.y += cos(uTime * 0.31 * aSpeed + aPhase * 1.37) * 0.004;
+      pos.x += sin(uTime * 0.32 * aSpeed + aPhase) * 0.005;
+      pos.y += cos(uTime * 0.28 * aSpeed + aPhase * 1.37) * 0.005;
     }
 
-    float wave = 0.5 + 0.5 * sin(uTime * 1.25 * aSpeed + aPhase);
-    vFlicker = aKind > 2.5 ? mix(0.65, 1.0, wave) : mix(0.84, 1.0, wave);
+    float wave = 0.5 + 0.5 * sin(uTime * 1.15 * aSpeed + aPhase);
+    float micro = 0.5 + 0.5 * sin(uTime * 2.7 * aSpeed + aPhase * 1.9);
+    if (aKind < 1.5) {
+      vFlicker = mix(0.84, 1.0, wave * 0.7 + micro * 0.3);
+    } else if (aKind < 2.5) {
+      vFlicker = mix(0.55, 1.0, wave * 0.65 + micro * 0.35);
+    } else {
+      vFlicker = mix(0.45, 1.0, wave);
+    }
+
+    // Subtle brightness boost for stars near the hovered cursor / touch point
+    float hoverDist = length(pos.xy - uHoverXY);
+    vHoverGlow = exp(-hoverDist * hoverDist * 10.5) * uHoverActive * step(aKind, 2.4);
 
     vec4 mvPosition = modelViewMatrix * vec4(pos, 1.0);
     gl_Position = projectionMatrix * mvPosition;
 
     float dist = max(1.2, -mvPosition.z);
-    gl_PointSize = clamp(aSize * uPixelRatio * uScaleFactor * (3.1 / dist), 1.4, 18.0);
+    float sizeBoost = 1.0 + vHoverGlow * 0.24;
+    gl_PointSize = clamp(aSize * sizeBoost * uPixelRatio * uScaleFactor * (3.1 / dist), 1.4, 22.0);
   }
 `;
 
@@ -60,24 +75,37 @@ const NODE_FRAGMENT_SHADER = /* glsl */ `
   varying float vFlicker;
   varying float vAlpha;
   varying float vKind;
+  varying float vHoverGlow;
 
   void main() {
     vec2 uv = gl_PointCoord - vec2(0.5);
     float d = length(uv);
     if (d > 0.5) discard;
 
-    // Crisp circular vector-style node with gentle anti-aliased edge
-    float disc = vKind < 2.5
-      ? smoothstep(0.46, 0.24, d)
-      : exp(-d * d * 22.0);
-    float ringHalo = vKind < 2.5
-      ? smoothstep(0.5, 0.28, d) * 0.28
-      : 0.0;
+    float alpha = 0.0;
+    vec3 col = vColor;
 
-    float alpha = clamp((disc + ringHalo) * vAlpha * vFlicker, 0.0, 1.0) * uReveal;
+    if (vKind < 1.5) {
+      // Dominant original dot-stars: luminous pinpoint core, soft astronomical halo, delicate 4-point glint
+      float core = exp(-d * d * 24.0);
+      float halo = smoothstep(0.50, 0.14, d) * 0.32;
+      float ax = exp(-abs(uv.x) * 28.0) * exp(-abs(uv.y) * 9.0);
+      float ay = exp(-abs(uv.y) * 28.0) * exp(-abs(uv.x) * 9.0);
+      float glint = (ax + ay) * 0.24 * smoothstep(0.5, 0.08, d);
+
+      float lum = clamp(core * 1.15 + halo + glint, 0.0, 1.0);
+      alpha = clamp(lum * (vAlpha + vHoverGlow * 0.22) * vFlicker, 0.0, 1.0) * uReveal;
+      col = mix(vColor, vec3(0.98, 0.99, 1.0), core * 0.55);
+      col = mix(col, vec3(0.68, 0.84, 1.0), vHoverGlow * 0.38);
+    } else {
+      // Secondary path micro-particles & distant faint stars
+      float core = exp(-d * d * 22.0);
+      float soft = smoothstep(0.48, 0.15, d) * 0.18;
+      alpha = clamp((core + soft) * (vAlpha + vHoverGlow * 0.28) * vFlicker, 0.0, 1.0) * uReveal;
+      col = mix(vColor, vec3(0.75, 0.88, 1.0), vHoverGlow * 0.42);
+    }
+
     if (alpha < 0.01) discard;
-
-    vec3 col = mix(vColor, vec3(0.98, 0.99, 1.0), disc * 0.28);
     gl_FragColor = vec4(col, alpha);
   }
 `;
@@ -91,7 +119,7 @@ const SATELLITE_VERTEX_SHADER = /* glsl */ `
     vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
     gl_Position = projectionMatrix * mvPosition;
     float dist = max(1.2, -mvPosition.z);
-    gl_PointSize = clamp(aSize * uPixelRatio * uScaleFactor * (3.2 / dist), 2.8, 12.0);
+    gl_PointSize = clamp(aSize * uPixelRatio * uScaleFactor * (3.2 / dist), 2.2, 10.0);
   }
 `;
 
@@ -104,11 +132,12 @@ const SATELLITE_FRAGMENT_SHADER = /* glsl */ `
     float d = length(uv);
     if (d > 0.5) discard;
 
-    float core = smoothstep(0.46, 0.16, d);
-    float alpha = core * uOpacity;
+    float core = exp(-d * d * 22.0);
+    float halo = smoothstep(0.48, 0.12, d) * 0.28;
+    float alpha = (core + halo) * uOpacity;
     if (alpha < 0.01) discard;
 
-    gl_FragColor = vec4(mix(uColor, vec3(0.98, 0.99, 1.0), core * 0.4), alpha);
+    gl_FragColor = vec4(mix(uColor, vec3(0.98, 0.99, 1.0), core * 0.45), alpha);
   }
 `;
 
@@ -122,12 +151,14 @@ const LINE_VERTEX_SHADER = /* glsl */ `
   varying float vProgress;
   varying float vSeed;
   varying float vAlpha;
+  varying vec2 vLocalXY;
 
   void main() {
     vColor = aColor;
     vProgress = aProgress;
     vSeed = aSeed;
     vAlpha = aAlpha;
+    vLocalXY = position.xy;
 
     gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
   }
@@ -136,29 +167,38 @@ const LINE_VERTEX_SHADER = /* glsl */ `
 const LINE_FRAGMENT_SHADER = /* glsl */ `
   uniform float uTime;
   uniform float uReveal;
+  uniform vec2 uHoverXY;
+  uniform float uHoverActive;
 
   varying vec3 vColor;
   varying float vProgress;
   varying float vSeed;
   varying float vAlpha;
+  varying vec2 vLocalXY;
 
   void main() {
     float alpha = vAlpha;
     vec3 col = vColor;
 
-    // Gentle luminous pulse gliding along traced hair, jawline, and collar strokes
-    float cycle = fract(uTime * 0.13 + vSeed * 17.19);
-    if (cycle < 0.20) {
-      float pulsePos = cycle / 0.20;
+    // Delicate travelling light pulse gliding through selected connections
+    float cycle = fract(uTime * 0.12 + vSeed * 17.19);
+    if (cycle < 0.22) {
+      float pulsePos = cycle / 0.22;
       float dist = abs(vProgress - pulsePos);
-      float pulse = exp(-dist * dist * 52.0);
+      float pulse = exp(-dist * dist * 54.0);
       float endFade = smoothstep(0.0, 0.12, pulsePos) * smoothstep(1.0, 0.88, pulsePos);
       float energy = pulse * endFade;
-      col = mix(col, vec3(0.58, 0.78, 1.0), energy * 0.75);
-      alpha += energy * 0.28;
+      col = mix(col, vec3(0.60, 0.80, 1.0), energy * 0.78);
+      alpha += energy * 0.30;
     }
 
-    gl_FragColor = vec4(col, clamp(alpha, 0.0, 0.98) * uReveal);
+    // Subtle light response across connected paths near pointer hover
+    float hoverDist = length(vLocalXY - uHoverXY);
+    float hoverResponse = exp(-hoverDist * hoverDist * 13.0) * uHoverActive;
+    col = mix(col, vec3(0.68, 0.84, 1.0), hoverResponse * 0.65);
+    alpha += hoverResponse * 0.32;
+
+    gl_FragColor = vec4(col, clamp(alpha, 0.0, 0.96) * uReveal);
   }
 `;
 
@@ -244,7 +284,7 @@ function scheduleAnimationFrame(
 }
 
 function sampleImageToBuffer(img: HTMLImageElement): PortraitImageBuffer {
-  const targetSize = 400;
+  const targetSize = 560;
   const offscreen = document.createElement('canvas');
   offscreen.width = targetSize;
   offscreen.height = targetSize;
@@ -267,7 +307,7 @@ function sampleImageToBuffer(img: HTMLImageElement): PortraitImageBuffer {
 }
 
 /**
- * Rasterizes a crisp static high-DPI PNG data URL of the line-and-dot network portrait
+ * Rasterizes a crisp static high-DPI PNG data URL of the celestial line-and-dot sculpture
  * for reduced-motion preferences or environments without WebGL.
  */
 function renderStaticLineDotDataUrl(data: LineDotPortraitData, size = 930): string {
@@ -281,31 +321,8 @@ function renderStaticLineDotDataUrl(data: LineDotPortraitData, size = 930): stri
   ctx.clearRect(0, 0, size, size);
   const sizeScale = size / 465;
 
-  // 1. Subtle elliptical orbital paths & satellite nodes
+  // 1. Subtle orbiting satellite particles around the sculpture
   for (const track of data.orbitalTracks) {
-    ctx.strokeStyle = track.isAccent
-      ? 'rgba(78, 126, 255, 0.19)'
-      : 'rgba(66, 74, 94, 0.14)';
-    ctx.lineWidth = Math.max(1, size * 0.0012);
-    ctx.beginPath();
-
-    const count = track.points.length / 3;
-    for (let i = 0; i < count; i++) {
-      const [rx, ry, rz] = rotateEulerXYZ(
-        track.points[i * 3],
-        track.points[i * 3 + 1],
-        track.points[i * 3 + 2],
-        track.tiltX,
-        track.tiltY,
-        track.tiltZ,
-      );
-      const p = projectPerspectivePoint(rx, ry, rz, CAMERA_Z, CAMERA_FOV, size);
-      if (i === 0) ctx.moveTo(p.x, p.y);
-      else ctx.lineTo(p.x, p.y);
-    }
-    ctx.closePath();
-    ctx.stroke();
-
     for (const sat of track.satellites) {
       const lx = Math.cos(sat.phase) * track.radiusX;
       const ly = Math.sin(sat.phase) * track.radiusY;
@@ -313,16 +330,16 @@ function renderStaticLineDotDataUrl(data: LineDotPortraitData, size = 930): stri
       const p = projectPerspectivePoint(rx, ry, rz, CAMERA_Z, CAMERA_FOV, size);
 
       ctx.fillStyle = sat.isAccent
-        ? 'rgba(118, 166, 255, 0.92)'
-        : 'rgba(236, 238, 246, 0.88)';
+        ? 'rgba(118, 166, 255, 0.85)'
+        : 'rgba(228, 234, 246, 0.78)';
       ctx.beginPath();
-      ctx.arc(p.x, p.y, sat.size * 0.55 * sizeScale, 0, Math.PI * 2);
+      ctx.arc(p.x, p.y, sat.size * 0.48 * sizeScale, 0, Math.PI * 2);
       ctx.fill();
     }
   }
 
-  // 2. Vector-style portrait line segments
-  ctx.lineWidth = Math.max(1.25, size * 0.0022);
+  // 2. Fine celestial connecting lines
+  ctx.lineWidth = Math.max(1.05, size * 0.00175);
   ctx.lineCap = 'round';
   for (let i = 0; i < data.segmentCount; i++) {
     const v = i * 6;
@@ -355,7 +372,7 @@ function renderStaticLineDotDataUrl(data: LineDotPortraitData, size = 930): stri
     ctx.stroke();
   }
 
-  // 3. Circular intersection nodes + subtle distant stars
+  // 3. Dominant original dot-stars, secondary path micro-particles, and faint background stars
   for (let i = 0; i < data.pointCount; i++) {
     const p = projectPerspectivePoint(
       data.pointPositions[i * 3],
@@ -370,7 +387,15 @@ function renderStaticLineDotDataUrl(data: LineDotPortraitData, size = 930): stri
     const g = Math.round(data.pointColors[i * 3 + 1] * 255);
     const b = Math.round(data.pointColors[i * 3 + 2] * 255);
     const alpha = data.pointAlphas[i];
-    const radius = Math.max(0.85, data.pointSizes[i] * 0.56 * sizeScale * p.scale);
+    const kind = data.pointKinds[i];
+    const radius = Math.max(0.7, data.pointSizes[i] * 0.52 * sizeScale * p.scale);
+
+    if (kind < 1.5) {
+      ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${(alpha * 0.22).toFixed(3)})`;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, radius * 1.9, 0, Math.PI * 2);
+      ctx.fill();
+    }
 
     ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${alpha.toFixed(3)})`;
     ctx.beginPath();
@@ -408,7 +433,7 @@ export function CelestialPortrait() {
     };
   }, []);
 
-  // Load and trace the line-and-dot artwork strictly in-browser
+  // Load and trace the attached line-and-dot artwork strictly in-browser
   useEffect(() => {
     let active = true;
     const img = new Image();
@@ -482,7 +507,9 @@ export function CelestialPortrait() {
     const portraitGroup = new THREE.Group();
     rootGroup.add(portraitGroup);
 
-    // 1. Traced line-art segments with travelling pulses
+    const hoverXYUniform = new THREE.Vector2(0, 0);
+
+    // 1. Fine celestial connecting lines with travelling pulses & hover light response
     const linesGeometry = new THREE.BufferGeometry();
     linesGeometry.setAttribute(
       'position',
@@ -508,6 +535,8 @@ export function CelestialPortrait() {
     const linesUniforms = {
       uTime: { value: 0 },
       uReveal: { value: 0.0 },
+      uHoverXY: { value: hoverXYUniform },
+      uHoverActive: { value: 0.0 },
     };
 
     const linesMaterial = new THREE.ShaderMaterial({
@@ -522,7 +551,7 @@ export function CelestialPortrait() {
     const linesMesh = new THREE.LineSegments(linesGeometry, linesMaterial);
     portraitGroup.add(linesMesh);
 
-    // 2. Extracted circular dot nodes & distant subtle stars
+    // 2. Dominant original dot stars, secondary path particles, and faint background stars
     const pointsGeometry = new THREE.BufferGeometry();
     pointsGeometry.setAttribute(
       'position',
@@ -558,6 +587,8 @@ export function CelestialPortrait() {
       uPixelRatio: { value: pixelRatio },
       uScaleFactor: { value: 1.0 },
       uReveal: { value: 0.0 },
+      uHoverXY: { value: hoverXYUniform },
+      uHoverActive: { value: 0.0 },
     };
 
     const pointsMaterial = new THREE.ShaderMaterial({
@@ -572,14 +603,11 @@ export function CelestialPortrait() {
     const pointsMesh = new THREE.Points(pointsGeometry, pointsMaterial);
     portraitGroup.add(pointsMesh);
 
-    // 3. Visually separated elliptical orbital trajectories + travelling satellites
+    // 3. Small satellite particles orbiting quietly around the sculpture
     const orbitGroup = new THREE.Group();
     rootGroup.add(orbitGroup);
 
     const orbitalTrackState: Array<{
-      geom: THREE.BufferGeometry;
-      mat: THREE.LineBasicMaterial;
-      baseOpacity: number;
       satellites: Array<{
         geom: THREE.BufferGeometry;
         mat: THREE.ShaderMaterial;
@@ -597,20 +625,6 @@ export function CelestialPortrait() {
       trackGroup.rotation.set(track.tiltX, track.tiltY, track.tiltZ);
       orbitGroup.add(trackGroup);
 
-      const trackGeom = new THREE.BufferGeometry();
-      trackGeom.setAttribute('position', new THREE.BufferAttribute(track.points, 3));
-
-      const baseOpacity = track.isAccent ? 0.19 : 0.13;
-      const trackMat = new THREE.LineBasicMaterial({
-        color: track.isAccent ? 0x4e7eff : 0x424a5e,
-        transparent: true,
-        opacity: 0,
-        depthWrite: false,
-      });
-
-      const loop = new THREE.LineLoop(trackGeom, trackMat);
-      trackGroup.add(loop);
-
       const satStates = track.satellites.map((sat) => {
         const satGeom = new THREE.BufferGeometry();
         satGeom.setAttribute('position', new THREE.BufferAttribute(new Float32Array([0, 0, 0]), 3));
@@ -620,7 +634,7 @@ export function CelestialPortrait() {
           uniforms: {
             uPixelRatio: { value: pixelRatio },
             uScaleFactor: pointsUniforms.uScaleFactor,
-            uColor: { value: new THREE.Color(sat.isAccent ? 0x6ea0ff : 0xe8ecf6) },
+            uColor: { value: new THREE.Color(sat.isAccent ? 0x6ea0ff : 0xe4eaf6) },
             uOpacity: { value: 0 },
           },
           vertexShader: SATELLITE_VERTEX_SHADER,
@@ -645,14 +659,11 @@ export function CelestialPortrait() {
           radiusY: track.radiusY,
           phase: sat.phase,
           speed: sat.speed,
-          baseOpacity: sat.isAccent ? 0.92 : 0.86,
+          baseOpacity: sat.isAccent ? 0.85 : 0.72,
         };
       });
 
       orbitalTrackState.push({
-        geom: trackGeom,
-        mat: trackMat,
-        baseOpacity,
         satellites: satStates,
       });
     }
@@ -661,6 +672,7 @@ export function CelestialPortrait() {
     let cachedDocCenterY = 0;
     let cachedWidth = 360;
     let cachedHeight = 360;
+    const halfViewHeight = Math.tan(((CAMERA_FOV * Math.PI) / 180) * 0.5) * CAMERA_Z;
 
     const syncSize = () => {
       const rect = containerEl.getBoundingClientRect();
@@ -676,7 +688,7 @@ export function CelestialPortrait() {
       camera.aspect = width / height;
       camera.updateProjectionMatrix();
 
-      pointsUniforms.uScaleFactor.value = Math.max(0.76, Math.min(1.18, height / 430));
+      pointsUniforms.uScaleFactor.value = Math.max(0.78, Math.min(1.18, height / 430));
     };
 
     syncSize();
@@ -689,6 +701,19 @@ export function CelestialPortrait() {
     let targetRotY = 0;
     let currentRotX = 0;
     let currentRotY = 0;
+    let targetParallaxX = 0;
+    let targetParallaxY = 0;
+    let currentParallaxX = 0;
+    let currentParallaxY = 0;
+    let targetHoverX = 0;
+    let targetHoverY = 0;
+    let targetHoverActive = 0;
+    let currentHoverActive = 0;
+
+    let activeTouchId: number | null = null;
+    let touchStartX = 0;
+    let touchStartY = 0;
+
     let revealProgress = 0;
     let inViewport = true;
     let tabVisible = !document.hidden;
@@ -700,9 +725,20 @@ export function CelestialPortrait() {
 
     const heroSection = containerEl.closest('section') ?? containerEl;
 
-    const handlePointerMove = (e: Event) => {
+    const updateHoverCoordsFromPage = (pageX: number, pageY: number) => {
+      if (cachedWidth <= 0 || cachedHeight <= 0) return;
+      const relX = (pageX - cachedDocCenterX) / (cachedWidth * 0.5);
+      const relY = -((pageY - cachedDocCenterY) / (cachedHeight * 0.5));
+      const aspect = cachedWidth / cachedHeight;
+      targetHoverX = relX * halfViewHeight * aspect;
+      targetHoverY = relY * halfViewHeight;
+      targetHoverActive = Math.hypot(relX, relY) <= 1.25 ? 1.0 : 0.0;
+    };
+
+    const handleHeroPointerMove = (e: Event) => {
       if (!inViewport || !tabVisible) return;
       const pe = e as PointerEvent;
+      if (pe.pointerType === 'touch') return;
       if (cachedWidth <= 0 || cachedHeight <= 0) return;
 
       const nx = ((pe.pageX - cachedDocCenterX) / cachedWidth) * 1.4;
@@ -710,39 +746,98 @@ export function CelestialPortrait() {
       const clampedX = Math.max(-1, Math.min(1, nx));
       const clampedY = Math.max(-1, Math.min(1, ny));
 
-      targetRotY = clampedX * 0.13;
-      targetRotX = -clampedY * 0.08;
+      targetRotY = clampedX * 0.14;
+      targetRotX = -clampedY * 0.085;
+      targetParallaxX = clampedX * 0.025;
+      targetParallaxY = -clampedY * 0.018;
+
+      updateHoverCoordsFromPage(pe.pageX, pe.pageY);
     };
 
-    const handlePointerLeave = () => {
+    const handleHeroPointerLeave = () => {
       targetRotX = 0;
       targetRotY = 0;
+      targetParallaxX = 0;
+      targetParallaxY = 0;
+      targetHoverActive = 0;
     };
 
-    heroSection.addEventListener('pointermove', handlePointerMove, { passive: true });
-    heroSection.addEventListener('pointerleave', handlePointerLeave, { passive: true });
+    const handleContainerPointerDown = (e: Event) => {
+      const pe = e as PointerEvent;
+      if (pe.pointerType !== 'touch') return;
+      activeTouchId = pe.pointerId;
+      touchStartX = pe.clientX;
+      touchStartY = pe.clientY;
+      updateHoverCoordsFromPage(pe.pageX, pe.pageY);
+    };
+
+    const handleContainerPointerMove = (e: Event) => {
+      const pe = e as PointerEvent;
+      if (pe.pointerType !== 'touch' || activeTouchId !== pe.pointerId) return;
+      const dx = pe.clientX - touchStartX;
+      const dy = pe.clientY - touchStartY;
+
+      const nx = Math.max(-1, Math.min(1, dx / Math.max(80, cachedWidth * 0.42)));
+      const ny = Math.max(-1, Math.min(1, dy / Math.max(80, cachedHeight * 0.42)));
+
+      targetRotY = nx * 0.20;
+      targetRotX = -ny * 0.09;
+      targetParallaxX = nx * 0.028;
+      updateHoverCoordsFromPage(pe.pageX, pe.pageY);
+    };
+
+    const handleContainerPointerEnd = (e: Event) => {
+      const pe = e as PointerEvent;
+      if (pe.pointerType !== 'touch') return;
+      if (activeTouchId === pe.pointerId) {
+        activeTouchId = null;
+        targetRotX = 0;
+        targetRotY = 0;
+        targetParallaxX = 0;
+        targetParallaxY = 0;
+        targetHoverActive = 0;
+      }
+    };
+
+    heroSection.addEventListener('pointermove', handleHeroPointerMove, { passive: true });
+    heroSection.addEventListener('pointerleave', handleHeroPointerLeave, { passive: true });
+    containerEl.addEventListener('pointerdown', handleContainerPointerDown, { passive: true });
+    containerEl.addEventListener('pointermove', handleContainerPointerMove, { passive: true });
+    containerEl.addEventListener('pointerup', handleContainerPointerEnd, { passive: true });
+    containerEl.addEventListener('pointercancel', handleContainerPointerEnd, { passive: true });
 
     const renderFrame = (dt: number) => {
       elapsed += dt;
       revealProgress = Math.min(1, revealProgress + dt * 2.4);
       const easedReveal = 1 - Math.pow(1 - revealProgress, 3);
 
+      currentHoverActive = THREE.MathUtils.damp(currentHoverActive, targetHoverActive, 6.0, dt);
+      hoverXYUniform.x = THREE.MathUtils.damp(hoverXYUniform.x, targetHoverX, 8.0, dt);
+      hoverXYUniform.y = THREE.MathUtils.damp(hoverXYUniform.y, targetHoverY, 8.0, dt);
+
       pointsUniforms.uTime.value = elapsed;
       pointsUniforms.uReveal.value = easedReveal;
+      pointsUniforms.uHoverActive.value = currentHoverActive;
+
       linesUniforms.uTime.value = elapsed;
       linesUniforms.uReveal.value = easedReveal;
+      linesUniforms.uHoverActive.value = currentHoverActive;
 
-      const ambientYaw = Math.sin(elapsed * 0.24) * 0.04;
-      const ambientPitch = Math.cos(elapsed * 0.19) * 0.018;
+      const ambientYaw = Math.sin(elapsed * 0.22) * 0.042;
+      const ambientPitch = Math.cos(elapsed * 0.17) * 0.018;
+      const ambientFloatY = Math.sin(elapsed * 0.55) * 0.013;
 
       currentRotX = THREE.MathUtils.damp(currentRotX, targetRotX + ambientPitch, 4.5, dt);
       currentRotY = THREE.MathUtils.damp(currentRotY, targetRotY + ambientYaw, 4.5, dt);
+      currentParallaxX = THREE.MathUtils.damp(currentParallaxX, targetParallaxX, 4.5, dt);
+      currentParallaxY = THREE.MathUtils.damp(currentParallaxY, targetParallaxY, 4.5, dt);
 
       rootGroup.rotation.x = currentRotX;
       rootGroup.rotation.y = currentRotY;
+      portraitGroup.position.x = currentParallaxX;
+      portraitGroup.position.y = currentParallaxY + ambientFloatY;
 
       for (const track of orbitalTrackState) {
-        track.mat.opacity = track.baseOpacity * easedReveal;
         for (const sat of track.satellites) {
           const angle = sat.phase + elapsed * sat.speed;
           sat.mesh.position.set(
@@ -838,8 +933,12 @@ export function CelestialPortrait() {
       resizeObserver.disconnect();
       intersectionObserver.disconnect();
       document.removeEventListener('visibilitychange', handleVisibilityChange);
-      heroSection.removeEventListener('pointermove', handlePointerMove);
-      heroSection.removeEventListener('pointerleave', handlePointerLeave);
+      heroSection.removeEventListener('pointermove', handleHeroPointerMove);
+      heroSection.removeEventListener('pointerleave', handleHeroPointerLeave);
+      containerEl.removeEventListener('pointerdown', handleContainerPointerDown);
+      containerEl.removeEventListener('pointermove', handleContainerPointerMove);
+      containerEl.removeEventListener('pointerup', handleContainerPointerEnd);
+      containerEl.removeEventListener('pointercancel', handleContainerPointerEnd);
       renderer.domElement.removeEventListener('webglcontextlost', handleContextLost);
       renderer.domElement.removeEventListener('webglcontextrestored', handleContextRestored);
 
@@ -848,8 +947,6 @@ export function CelestialPortrait() {
       linesGeometry.dispose();
       linesMaterial.dispose();
       for (const track of orbitalTrackState) {
-        track.geom.dispose();
-        track.mat.dispose();
         for (const sat of track.satellites) {
           sat.geom.dispose();
           sat.mat.dispose();
@@ -866,6 +963,7 @@ export function CelestialPortrait() {
       data-testid="celestial-portrait"
       data-render-mode={showStaticFallback ? 'static' : 'webgl'}
       aria-hidden="true"
+      style={{ touchAction: 'pan-y' }}
       className="relative h-[330px] w-[330px] max-w-full shrink-0 select-none [contain:layout_paint] [transform:translateZ(0)] sm:h-[390px] sm:w-[390px] lg:h-[465px] lg:w-[465px]"
     >
       {/* Minimalist concentric hairline framing */}

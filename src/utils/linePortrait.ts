@@ -37,18 +37,22 @@ export interface LineDotPortraitData {
   /** Number of line segments */
   segmentCount: number;
 
-  /** Extracted circular intersection/contour nodes + quiet background stars */
+  /**
+   * Star & particle points:
+   * - kind 1: dominant original illustration dot nodes
+   * - kind 2: tiny secondary particles along traced paths
+   * - kind 3: very small, faint surrounding background stars
+   */
   pointPositions: Float32Array;
   pointColors: Float32Array;
   pointSizes: Float32Array;
   pointPhases: Float32Array;
   pointSpeeds: Float32Array;
   pointAlphas: Float32Array;
-  /** 1 = portrait node dot, 3 = subtle background star */
   pointKinds: Float32Array;
   pointCount: number;
 
-  /** Elliptical orbital trajectories surrounding the portrait */
+  /** Gentle elliptical orbital paths for small orbiting satellite particles */
   orbitalTracks: OrbitalTrackData[];
 }
 
@@ -85,45 +89,38 @@ function smoothstep(edge0: number, edge1: number, x: number): number {
 }
 
 /**
- * Maps normalized image coordinates (u, v) of the square line-and-dot artwork
- * onto balanced 3D cranial/facial relief depth (Z) for subtle mouse parallax.
+ * Assigns shallow 3D Z-layer depth across distinct illustration groups
+ * (inner facial features, contour/jaw, hair layers, neck/collar/shoulders)
+ * so the 2D drawing floats as a multi-plane 3D constellation without
+ * distorting facial anatomy.
  */
 export function estimateLinePortraitDepth(u: number, v: number): number {
-  const cx = 0.49;
-  const cy = 0.50;
-  const dx = (u - cx) / 0.25;
-  const dy = (v - cy) / 0.30;
-  const radialSq = dx * dx + dy * dy;
-
-  // Base cranial depth
-  let z = radialSq < 1.25 ? Math.sqrt(Math.max(0, 1.25 - radialSq)) * 0.22 - 0.05 : -0.10;
-
-  // Forehead & messy bangs volume hanging over brow
-  const hairFrontDx = (u - 0.49) / 0.24;
-  const hairFrontDy = (v - 0.36) / 0.17;
-  z += 0.06 * Math.exp(-(hairFrontDx * hairFrontDx + hairFrontDy * hairFrontDy));
-
-  // Nose bridge & tip projection
-  const noseDx = (u - 0.485) / 0.045;
-  const noseDy = (v - 0.58) / 0.055;
-  z += 0.095 * Math.exp(-(noseDx * noseDx + noseDy * noseDy));
-
-  // Brow & eyes plane
-  const browDx = (u - 0.49) / 0.16;
-  const browDy = (v - 0.49) / 0.035;
-  z += 0.045 * Math.exp(-(browDx * browDx + browDy * browDy));
-
-  // Lips & chin forward curve
-  const mouthDx = (u - 0.49) / 0.085;
-  const mouthDy = (v - 0.675) / 0.045;
-  z += 0.055 * Math.exp(-(mouthDx * mouthDx + mouthDy * mouthDy));
-
-  // Neck & upper jacket shoulders recede softly behind face
-  if (v > 0.71) {
-    z -= smoothstep(0.71, 0.98, v) * 0.12;
+  // Core facial features plane (eyes, brows, nose, lips) sit closest to viewer
+  const inFaceCore =
+    u >= 0.33 && u <= 0.65 && v >= 0.46 && v <= 0.72;
+  if (inFaceCore) {
+    const coreWeight =
+      smoothstep(0.33, 0.37, u) *
+      (1 - smoothstep(0.61, 0.65, u)) *
+      smoothstep(0.46, 0.49, v) *
+      (1 - smoothstep(0.69, 0.72, v));
+    return 0.02 + coreWeight * 0.065; // up to +0.085
   }
 
-  return z;
+  // Lower neck, collar, and shoulders step subtly further back
+  if (v > 0.72) {
+    const collarBlend = smoothstep(0.72, 0.80, v);
+    return 0.015 - collarBlend * 0.085; // down to -0.070
+  }
+
+  // Hair & upper silhouette: gentle separation between inner strands and outer crown
+  const radialFromCenter = Math.hypot((u - 0.50) / 0.32, (v - 0.38) / 0.32);
+  if (v < 0.55) {
+    return 0.045 - clamp01(radialFromCenter) * 0.065; // +0.045 inner -> -0.020 outer
+  }
+
+  // Jawline, cheeks & ears mid-plane
+  return 0.015;
 }
 
 /**
@@ -131,7 +128,7 @@ export function estimateLinePortraitDepth(u: number, v: number): number {
  */
 export function extractInkMask(
   buffer: PortraitImageBuffer,
-  inkThreshold = 0.3,
+  inkThreshold = 0.28,
 ): Uint8Array {
   const { width, height, data } = buffer;
   const mask = new Uint8Array(width * height);
@@ -160,19 +157,23 @@ export function detectDotNodes(
   width: number,
   height: number,
 ): DotNode[] {
+  const diskRadius = width >= 460 ? 3 : 2;
+  const radiusSq = diskRadius === 3 ? 10 : 5;
   const diskOffsets: Array<[number, number]> = [];
-  for (let dy = -2; dy <= 2; dy++) {
-    for (let dx = -2; dx <= 2; dx++) {
-      if (dx * dx + dy * dy <= 5) {
+
+  for (let dy = -diskRadius; dy <= diskRadius; dy++) {
+    for (let dx = -diskRadius; dx <= diskRadius; dx++) {
+      if (dx * dx + dy * dy <= radiusSq) {
         diskOffsets.push([dx, dy]);
       }
     }
   }
-  const minFill = Math.floor(diskOffsets.length * 0.72); // >= 15 of 21 pixels
 
+  const minFill = Math.floor(diskOffsets.length * 0.72);
   const denseCore = new Uint8Array(width * height);
-  for (let y = 2; y < height - 2; y++) {
-    for (let x = 2; x < width - 2; x++) {
+
+  for (let y = diskRadius; y < height - diskRadius; y++) {
+    for (let x = diskRadius; x < width - diskRadius; x++) {
       if (!mask[y * width + x]) continue;
       let count = 0;
       for (let k = 0; k < diskOffsets.length; k++) {
@@ -191,9 +192,11 @@ export function detectDotNodes(
   const aspect = width / height;
   const scaleX = 1.62 * aspect;
   const scaleY = 1.62;
+  const areaScale = (width / 400) * (width / 400);
+  const maxComponentPixels = Math.max(80, Math.round(95 * areaScale));
 
-  for (let y = 2; y < height - 2; y++) {
-    for (let x = 2; x < width - 2; x++) {
+  for (let y = diskRadius; y < height - diskRadius; y++) {
+    for (let x = diskRadius; x < width - diskRadius; x++) {
       const startIdx = y * width + x;
       if (!denseCore[startIdx] || visited[startIdx]) continue;
 
@@ -239,31 +242,31 @@ export function detectDotNodes(
       const elongation = Math.max(spanW, spanH) / Math.max(1, Math.min(spanW, spanH));
 
       // Keep circular dots while excluding elongated dark eyebrows or wide fills
-      if (count < 2 || count > 90 || elongation > 2.25) continue;
+      if (count < 2 || count > maxComponentPixels || elongation > 2.2) continue;
 
       const u = (sumX / count) / (width - 1);
       const v = (sumY / count) / (height - 1);
-      const radius = Math.sqrt(count / Math.PI);
+      const radius = Math.sqrt(count / Math.PI) * (400 / width);
 
       rawNodes.push({
         u,
         v,
         x: (u - 0.5) * scaleX,
         y: (0.51 - v) * scaleY,
-        z: estimateLinePortraitDepth(u, v) + 0.005,
+        z: estimateLinePortraitDepth(u, v) + 0.008,
         radius,
       });
     }
   }
 
-  // Merge any accidentally split fragments closer than 0.018 in normalized UV space
+  // Merge any accidentally split fragments closer than 0.015 in normalized UV space
   const merged: DotNode[] = [];
   for (let i = 0; i < rawNodes.length; i++) {
     const candidate = rawNodes[i];
     let duplicate = false;
     for (let j = 0; j < merged.length; j++) {
       const m = merged[j];
-      if (Math.hypot(candidate.u - m.u, candidate.v - m.v) < 0.016) {
+      if (Math.hypot(candidate.u - m.u, candidate.v - m.v) < 0.015) {
         duplicate = true;
         break;
       }
@@ -282,7 +285,7 @@ export function thinInkMask(mask: Uint8Array, width: number, height: number): Ui
   const cur = new Uint8Array(mask);
   const toDelete: number[] = [];
 
-  for (let iter = 0; iter < 14; iter++) {
+  for (let iter = 0; iter < 16; iter++) {
     let changed = false;
 
     for (let step = 0; step < 2; step++) {
@@ -382,6 +385,40 @@ function simplifyPolylineRdp(
   return [first, last];
 }
 
+/**
+ * Lightly smooths interior vertices along gentle curves while keeping sharp corners
+ * (hair tips, lapel corners, junctions) crisp.
+ */
+function smoothGentleCurves(
+  pts: Array<{ x: number; y: number }>,
+): Array<{ x: number; y: number }> {
+  if (pts.length <= 3) return pts;
+  const out = pts.map((p) => ({ ...p }));
+
+  for (let i = 1; i < pts.length - 1; i++) {
+    const prev = pts[i - 1];
+    const curr = pts[i];
+    const next = pts[i + 1];
+
+    const v1x = curr.x - prev.x;
+    const v1y = curr.y - prev.y;
+    const v2x = next.x - curr.x;
+    const v2y = next.y - curr.y;
+    const len1 = Math.hypot(v1x, v1y);
+    const len2 = Math.hypot(v2x, v2y);
+    if (len1 < 0.001 || len2 < 0.001) continue;
+
+    const cosAngle = (v1x * v2x + v1y * v2y) / (len1 * len2);
+    // Smooth only gentle bends (> ~120 degrees between segments)
+    if (cosAngle > 0.5) {
+      out[i].x = curr.x * 0.68 + (prev.x + next.x) * 0.16;
+      out[i].y = curr.y * 0.68 + (prev.y + next.y) * 0.16;
+    }
+  }
+
+  return out;
+}
+
 const NEIGHBOR_8: ReadonlyArray<[number, number]> = [
   [1, 0],
   [1, 1],
@@ -431,7 +468,7 @@ export function traceSkeletonPolylines(
     let cur = firstNext;
     visitedEdges.add(edgeKey(prev, cur));
 
-    for (let guard = 0; guard < 2000; guard++) {
+    for (let guard = 0; guard < 2800; guard++) {
       const cx = cur % width;
       const cy = Math.floor(cur / width);
       chain.push({ x: cx, y: cy });
@@ -455,7 +492,6 @@ export function traceSkeletonPolylines(
         if (!skeleton[ni]) continue;
         if (visitedEdges.has(edgeKey(cur, ni))) continue;
 
-        // Prefer forward direction and cardinal transitions over sharp reversals
         const len = Math.hypot(dx, dy);
         const align = (dx * prevDx + dy * prevDy) / len;
         if (align > bestAlignment) {
@@ -478,6 +514,8 @@ export function traceSkeletonPolylines(
   };
 
   const polylines: Polyline2D[] = [];
+  const rdpOpen = width >= 460 ? 0.52 : 0.56;
+  const rdpClosed = width >= 460 ? 0.64 : 0.70;
 
   // Pass 1: Trace from endpoints and junctions (degree !== 2)
   for (let p = 0; p < activePixels.length; p++) {
@@ -495,7 +533,7 @@ export function traceSkeletonPolylines(
 
       const raw = walkChain(idx, ni);
       if (raw.length >= 2) {
-        const simplified = simplifyPolylineRdp(raw, 0.58);
+        const simplified = smoothGentleCurves(simplifyPolylineRdp(raw, rdpOpen));
         polylines.push({
           points: simplified.map((pt) => ({
             u: pt.x / (width - 1),
@@ -520,7 +558,7 @@ export function traceSkeletonPolylines(
 
       const raw = walkChain(idx, ni);
       if (raw.length >= 4) {
-        const simplified = simplifyPolylineRdp(raw, 0.72);
+        const simplified = smoothGentleCurves(simplifyPolylineRdp(raw, rdpClosed));
         polylines.push({
           points: simplified.map((pt) => ({
             u: pt.x / (width - 1),
@@ -537,24 +575,24 @@ export function traceSkeletonPolylines(
 function buildOrbitalTracks(rng: () => number): OrbitalTrackData[] {
   const configs = [
     {
-      radiusX: 1.04,
-      radiusY: 0.94,
-      tiltX: 1.14,
-      tiltY: 0.3,
-      tiltZ: -0.22,
-      speed: 0.036,
+      radiusX: 1.02,
+      radiusY: 0.92,
+      tiltX: 1.12,
+      tiltY: 0.32,
+      tiltZ: -0.24,
+      speed: 0.042,
       isAccent: true,
-      satCount: 2,
+      satCount: 3,
     },
     {
-      radiusX: 1.16,
-      radiusY: 1.06,
-      tiltX: 1.28,
-      tiltY: -0.44,
-      tiltZ: 0.28,
-      speed: -0.025,
+      radiusX: 1.14,
+      radiusY: 1.04,
+      tiltX: 1.26,
+      tiltY: -0.46,
+      tiltZ: 0.30,
+      speed: -0.030,
       isAccent: false,
-      satCount: 2,
+      satCount: 3,
     },
   ];
 
@@ -571,12 +609,12 @@ function buildOrbitalTracks(rng: () => number): OrbitalTrackData[] {
 
     const satellites: OrbitalSatelliteSpec[] = [];
     for (let s = 0; s < cfg.satCount; s++) {
-      const baseAngle = ((s + 0.3 + ringIdx * 0.45) / cfg.satCount) * Math.PI * 2;
+      const baseAngle = ((s + 0.25 + ringIdx * 0.4) / cfg.satCount) * Math.PI * 2;
       satellites.push({
         phase: (baseAngle + (rng() - 0.5) * 0.35) % (Math.PI * 2),
-        speed: cfg.speed * (1.45 + s * 0.35),
-        size: cfg.isAccent && s === 0 ? 4.2 : 3.2,
-        isAccent: cfg.isAccent || s === 0,
+        speed: cfg.speed * (1.35 + s * 0.32),
+        size: cfg.isAccent && s === 0 ? 3.5 : 2.5 + rng() * 0.7,
+        isAccent: cfg.isAccent && s % 2 === 0,
       });
     }
 
@@ -595,8 +633,12 @@ function buildOrbitalTracks(rng: () => number): OrbitalTrackData[] {
 }
 
 /**
- * Reconstructs a clean 3D celestial line-and-dot network portrait directly from
- * the black-on-white vector-style line drawing buffer.
+ * Reconstructs a 3D celestial constellation sculpture directly from
+ * the black-on-white line-and-dot drawing buffer:
+ * - Fine silver-white & restrained cool-blue traced connecting paths in shallow 3D Z-layers
+ * - Dominant luminous star nodes at every original dot position
+ * - Tiny secondary micro-particles subtly sparkling along existing paths
+ * - Very small, faint distant stars framing the sculpture
  */
 export function buildLineDotPortrait(
   buffer: PortraitImageBuffer,
@@ -604,7 +646,7 @@ export function buildLineDotPortrait(
 ): LineDotPortraitData {
   const rng = createSeededRng(seed);
   const { width, height } = buffer;
-  const mask = extractInkMask(buffer, 0.32);
+  const mask = extractInkMask(buffer, 0.28);
 
   // 1. Detect circular intersection nodes prior to thinning
   const nodes = detectDotNodes(mask, width, height);
@@ -633,14 +675,24 @@ export function buildLineDotPortrait(
     alpha: number;
   }
 
+  interface SecondaryParticle {
+    x: number;
+    y: number;
+    z: number;
+    isAccent: boolean;
+    size: number;
+    alpha: number;
+  }
+
   const segments: SegmentEntry[] = [];
+  const secondaryParticles: SecondaryParticle[] = [];
+  const maxSecondaryParticles = 240;
 
   for (let pIdx = 0; pIdx < polylines.length; pIdx++) {
     const poly = polylines[pIdx];
     const pts = poly.points;
     if (pts.length < 2) continue;
 
-    // Cumulative arc length along the polyline so travelling light pulses glide smoothly
     const arcLengths = new Float32Array(pts.length);
     let totalLen = 0;
     for (let i = 1; i < pts.length; i++) {
@@ -650,6 +702,7 @@ export function buildLineDotPortrait(
     if (totalLen <= 0) continue;
 
     const polySeed = rng();
+    let nextSampleDist = 0.025 + rng() * 0.03;
 
     for (let i = 0; i < pts.length - 1; i++) {
       const a = pts[i];
@@ -658,39 +711,43 @@ export function buildLineDotPortrait(
       const midV = (a.v + b.v) * 0.5;
 
       const isFaceCore =
-        midU > 0.28 && midU < 0.70 && midV > 0.43 && midV < 0.76;
-      const isCollar = midV >= 0.74;
+        midU > 0.31 && midU < 0.67 && midV > 0.46 && midV < 0.73;
+      const isCollar = midV >= 0.73;
       const isAccentStrand = !isFaceCore && rng() < 0.14;
 
-      let r = 0.86;
-      let g = 0.88;
-      let bCol = 0.93;
-      let alpha = 0.74;
+      // Keep lines fine, silver-white, and restrained so original dot-stars remain dominant
+      let r = 0.78;
+      let g = 0.81;
+      let bCol = 0.88;
+      let alpha = 0.52 + rng() * 0.12;
 
       if (isFaceCore) {
-        r = 0.95;
-        g = 0.95;
-        bCol = 0.98;
-        alpha = 0.9;
+        r = 0.88;
+        g = 0.90;
+        bCol = 0.96;
+        alpha = 0.66 + rng() * 0.12;
       } else if (isCollar) {
-        r = 0.72;
-        g = 0.76;
-        bCol = 0.85;
-        alpha = 0.6;
+        r = 0.64;
+        g = 0.68;
+        bCol = 0.78;
+        alpha = 0.42 + rng() * 0.10;
       } else if (isAccentStrand) {
         r = 0.46;
         g = 0.66;
         bCol = 0.98;
-        alpha = 0.68;
+        alpha = 0.48 + rng() * 0.12;
       }
+
+      const az = estimateLinePortraitDepth(a.u, a.v);
+      const bz = estimateLinePortraitDepth(b.u, b.v);
 
       segments.push({
         ax: (a.u - 0.5) * scaleX,
         ay: (0.51 - a.v) * scaleY,
-        az: estimateLinePortraitDepth(a.u, a.v),
+        az,
         bx: (b.u - 0.5) * scaleX,
         by: (0.51 - b.v) * scaleY,
-        bz: estimateLinePortraitDepth(b.u, b.v),
+        bz,
         p0: arcLengths[i] / totalLen,
         p1: arcLengths[i + 1] / totalLen,
         seed: polySeed,
@@ -699,6 +756,39 @@ export function buildLineDotPortrait(
         b: bCol,
         alpha,
       });
+
+      // Place tiny secondary micro-particles along longer traced paths
+      if (
+        secondaryParticles.length < maxSecondaryParticles &&
+        arcLengths[i + 1] >= nextSampleDist
+      ) {
+        const segLen = Math.max(1e-5, arcLengths[i + 1] - arcLengths[i]);
+        const t = clamp01((nextSampleDist - arcLengths[i]) / segLen);
+        const su = a.u + (b.u - a.u) * t;
+        const sv = a.v + (b.v - a.v) * t;
+
+        // Ensure secondary particles stay clear of primary star nodes
+        let nearPrimaryNode = false;
+        for (let n = 0; n < nodes.length; n++) {
+          if (Math.hypot(su - nodes[n].u, sv - nodes[n].v) < 0.022) {
+            nearPrimaryNode = true;
+            break;
+          }
+        }
+
+        if (!nearPrimaryNode) {
+          secondaryParticles.push({
+            x: (su - 0.5) * scaleX,
+            y: (0.51 - sv) * scaleY,
+            z: estimateLinePortraitDepth(su, sv) + (rng() - 0.5) * 0.014,
+            isAccent: rng() < 0.22,
+            size: 1.35 + rng() * 0.75,
+            alpha: 0.28 + rng() * 0.24,
+          });
+        }
+
+        nextSampleDist += 0.052 + rng() * 0.04;
+      }
     }
   }
 
@@ -736,9 +826,12 @@ export function buildLineDotPortrait(
     lineAlphas[a0 + 1] = seg.alpha;
   }
 
-  // 3. Build point buffers from detected circular nodes + sparse quiet distant stars
-  const distantStarCount = 64;
-  const pointCount = nodes.length + distantStarCount;
+  // 3. Build unified point buffers:
+  //    [0 .. nodes.length) -> dominant original star nodes (kind = 1)
+  //    [nodes.length .. +secondary) -> tiny path particles (kind = 2)
+  //    [.. +distantStarCount) -> faint background stars (kind = 3)
+  const distantStarCount = 84;
+  const pointCount = nodes.length + secondaryParticles.length + distantStarCount;
   const pointPositions = new Float32Array(pointCount * 3);
   const pointColors = new Float32Array(pointCount * 3);
   const pointSizes = new Float32Array(pointCount);
@@ -747,48 +840,84 @@ export function buildLineDotPortrait(
   const pointAlphas = new Float32Array(pointCount);
   const pointKinds = new Float32Array(pointCount);
 
+  // Kind 1: Dominant original dot stars
   for (let i = 0; i < nodes.length; i++) {
     const n = nodes[i];
     pointPositions[i * 3] = n.x;
     pointPositions[i * 3 + 1] = n.y;
     pointPositions[i * 3 + 2] = n.z;
 
-    const isAccent = rng() < 0.24;
-    if (isAccent) {
-      pointColors[i * 3] = 0.48;
-      pointColors[i * 3 + 1] = 0.68;
+    const toneRoll = rng();
+    if (toneRoll < 0.22) {
+      // Restrained electric cool-blue highlight
+      pointColors[i * 3] = 0.50;
+      pointColors[i * 3 + 1] = 0.70;
       pointColors[i * 3 + 2] = 1.0;
+    } else if (toneRoll < 0.52) {
+      // Cool silver highlight
+      pointColors[i * 3] = 0.84;
+      pointColors[i * 3 + 1] = 0.87;
+      pointColors[i * 3 + 2] = 0.95;
     } else {
-      pointColors[i * 3] = 0.96;
-      pointColors[i * 3 + 1] = 0.96;
-      pointColors[i * 3 + 2] = 0.99;
+      // Luminous star white
+      pointColors[i * 3] = 0.97;
+      pointColors[i * 3 + 1] = 0.97;
+      pointColors[i * 3 + 2] = 1.0;
     }
 
-    pointSizes[i] = Math.max(2.9, Math.min(4.8, 2.0 + n.radius * 0.85));
+    pointSizes[i] = Math.max(3.8, Math.min(6.4, 3.0 + n.radius * 1.15 + rng() * 0.5));
     pointPhases[i] = rng() * Math.PI * 2;
-    pointSpeeds[i] = 0.6 + rng() * 1.1;
-    pointAlphas[i] = 0.95;
+    pointSpeeds[i] = 0.55 + rng() * 1.15;
+    pointAlphas[i] = 0.88 + rng() * 0.12;
     pointKinds[i] = 1;
   }
 
+  // Kind 2: Tiny secondary particles along traced paths
+  const secOffset = nodes.length;
+  for (let s = 0; s < secondaryParticles.length; s++) {
+    const idx = secOffset + s;
+    const sp = secondaryParticles[s];
+    pointPositions[idx * 3] = sp.x;
+    pointPositions[idx * 3 + 1] = sp.y;
+    pointPositions[idx * 3 + 2] = sp.z;
+
+    if (sp.isAccent) {
+      pointColors[idx * 3] = 0.52;
+      pointColors[idx * 3 + 1] = 0.72;
+      pointColors[idx * 3 + 2] = 0.98;
+    } else {
+      pointColors[idx * 3] = 0.84;
+      pointColors[idx * 3 + 1] = 0.86;
+      pointColors[idx * 3 + 2] = 0.94;
+    }
+
+    pointSizes[idx] = sp.size;
+    pointPhases[idx] = rng() * Math.PI * 2;
+    pointSpeeds[idx] = 0.7 + rng() * 1.3;
+    pointAlphas[idx] = sp.alpha;
+    pointKinds[idx] = 2;
+  }
+
+  // Kind 3: Faint surrounding astronomical stars
+  const starOffset = secOffset + secondaryParticles.length;
   for (let st = 0; st < distantStarCount; st++) {
-    const idx = nodes.length + st;
+    const idx = starOffset + st;
     const angle = rng() * Math.PI * 2;
-    const radius = 0.62 + Math.pow(rng(), 0.7) * 1.15;
+    const radius = 0.58 + Math.pow(rng(), 0.72) * 1.12;
     pointPositions[idx * 3] = Math.cos(angle) * radius;
     pointPositions[idx * 3 + 1] = Math.sin(angle) * radius;
-    pointPositions[idx * 3 + 2] = -0.45 - rng() * 0.85;
+    pointPositions[idx * 3 + 2] = -0.32 - rng() * 0.65;
 
-    const isBlue = rng() < 0.18;
-    const lum = 0.45 + rng() * 0.35;
-    pointColors[idx * 3] = isBlue ? 0.52 : lum * 0.9;
-    pointColors[idx * 3 + 1] = isBlue ? 0.7 : lum * 0.92;
+    const isBlue = rng() < 0.2;
+    const lum = 0.52 + rng() * 0.35;
+    pointColors[idx * 3] = isBlue ? 0.54 : lum * 0.9;
+    pointColors[idx * 3 + 1] = isBlue ? 0.72 : lum * 0.92;
     pointColors[idx * 3 + 2] = isBlue ? 0.98 : lum;
 
-    pointSizes[idx] = 1.2 + rng() * 1.1;
+    pointSizes[idx] = 1.05 + rng() * 0.95;
     pointPhases[idx] = rng() * Math.PI * 2;
     pointSpeeds[idx] = 0.35 + rng() * 0.85;
-    pointAlphas[idx] = 0.2 + rng() * 0.18;
+    pointAlphas[idx] = 0.16 + rng() * 0.18;
     pointKinds[idx] = 3;
   }
 
