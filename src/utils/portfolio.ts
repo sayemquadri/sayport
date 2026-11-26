@@ -1,17 +1,17 @@
 import type {
-  DisciplineFilter,
   ProjectItem,
   SocialChannel,
+  WorkCategory,
 } from '../data/portfolio';
 
 export function filterProjects(
   projects: readonly ProjectItem[],
-  filter: DisciplineFilter,
+  filter: WorkCategory,
 ): ProjectItem[] {
   if (filter === 'all') {
     return [...projects];
   }
-  return projects.filter((project) => project.discipline === filter);
+  return projects.filter((project) => project.category === filter);
 }
 
 export function findProjectById(
@@ -54,6 +54,9 @@ export function isValidConfiguredUrl(rawUrl: string): boolean {
     const emailPart = trimmed.slice('mailto:'.length).trim();
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailPart);
   }
+  if (trimmed.startsWith('/')) {
+    return trimmed.length > 1;
+  }
   try {
     const parsed = new URL(trimmed);
     return parsed.protocol === 'https:' || parsed.protocol === 'http:';
@@ -66,6 +69,36 @@ export function getConfiguredSocialLinks(
   channels: readonly SocialChannel[],
 ): SocialChannel[] {
   return channels.filter((channel) => isValidConfiguredUrl(channel.url));
+}
+
+export function getEmailChannel(
+  channels: readonly SocialChannel[],
+): SocialChannel | null {
+  const email = channels.find((c) => c.id === 'email');
+  if (!email || !isValidConfiguredUrl(email.url)) {
+    return null;
+  }
+  return email;
+}
+
+export function buildMailtoHref(
+  baseMailtoUrl: string,
+  subject: string,
+  message: string,
+): string | null {
+  if (!isValidConfiguredUrl(baseMailtoUrl)) {
+    return null;
+  }
+  const cleanSubject = subject.trim();
+  const cleanMessage = message.trim();
+  if (!cleanSubject || !cleanMessage) {
+    return null;
+  }
+  const params = new URLSearchParams({
+    subject: cleanSubject,
+    body: cleanMessage,
+  });
+  return `${baseMailtoUrl}?${params.toString().replace(/\+/g, '%20')}`;
 }
 
 export function getCopyrightYear(referenceDate: Date = new Date()): number {

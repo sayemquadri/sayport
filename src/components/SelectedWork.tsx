@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react';
 import {
   PROJECTS,
-  WORK_FILTERS,
-  type DisciplineFilter,
+  WORK_CATEGORIES,
+  WORK_SECTION_CONTENT,
+  type WorkCategory,
 } from '../data/portfolio';
 import {
   filterProjects,
@@ -12,13 +13,20 @@ import {
 import { ProjectCard } from './ProjectCard';
 import { ProjectModal } from './ProjectModal';
 
-export function SelectedWork() {
-  const [activeFilter, setActiveFilter] = useState<DisciplineFilter>('all');
-  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
+interface SelectedWorkProps {
+  selectedProjectId: string | null;
+  onSelectProjectId: (projectId: string | null) => void;
+}
+
+export function SelectedWork({
+  selectedProjectId,
+  onSelectProjectId,
+}: SelectedWorkProps) {
+  const [activeCategory, setActiveCategory] = useState<WorkCategory>('all');
 
   const visibleProjects = useMemo(
-    () => filterProjects(PROJECTS, activeFilter),
-    [activeFilter],
+    () => filterProjects(PROJECTS, activeCategory),
+    [activeCategory],
   );
 
   const selectedProject = useMemo(
@@ -33,60 +41,77 @@ export function SelectedWork() {
     const pool = visibleProjects.length > 0 ? visibleProjects : PROJECTS;
     const nextId = getAdjacentProjectId(pool, selectedProjectId, direction);
     if (nextId) {
-      setSelectedProjectId(nextId);
+      onSelectProjectId(nextId);
     }
   };
 
   return (
     <section
       id="work"
-      className="border-t border-[#27272C] px-5 py-20 sm:px-8 sm:py-24 lg:px-10 lg:py-28"
+      className="border-t border-[#27272C] px-5 py-24 sm:px-8 sm:py-28 lg:px-10 lg:py-32"
     >
       <div className="mx-auto max-w-6xl">
-        <div className="flex flex-col justify-between gap-8 lg:flex-row lg:items-end">
-          <div>
-            <p className="text-xs font-medium tracking-[0.14em] text-[#919198] tabular-nums">
-              02 · Selected Work
-            </p>
-            <h2 className="mt-4 text-[clamp(2rem,3.6vw,3rem)] font-semibold leading-[1.12] tracking-[-0.02em] text-[#F0EFEC] [text-wrap:balance]">
-              Selected projects{' '}
-              <span className="font-serif italic font-normal">&amp; ventures.</span>
-            </h2>
-          </div>
-
-          <div
-            role="group"
-            aria-label="Filter projects by discipline"
-            className="flex flex-wrap items-center gap-1.5 rounded-lg border border-[#27272C] bg-[#111114] p-1 self-start lg:self-auto"
-          >
-            {WORK_FILTERS.map((filter) => {
-              const isSelected = activeFilter === filter.id;
-              return (
-                <button
-                  key={filter.id}
-                  type="button"
-                  onClick={() => setActiveFilter(filter.id)}
-                  aria-pressed={isSelected}
-                  className={`min-h-[38px] rounded-md px-3.5 py-1.5 text-xs font-medium whitespace-nowrap shrink-0 transition-colors duration-150 ${
-                    isSelected
-                      ? 'bg-[#4E7EFF] text-[#F0EFEC]'
-                      : 'text-[#919198] hover:text-[#F0EFEC]'
-                  }`}
-                >
-                  {filter.label}
-                </button>
-              );
-            })}
-          </div>
+        <div className="max-w-2xl">
+          <p className="text-xs font-medium tracking-[0.14em] text-[#C4A7FF] tabular-nums">
+            {WORK_SECTION_CONTENT.indexLabel}
+          </p>
+          <h2 className="mt-4 text-[clamp(2.2rem,4vw,3.35rem)] font-semibold leading-[1.1] tracking-[-0.025em] text-[#F0EFEC] [text-wrap:balance]">
+            Complete Portfolio{' '}
+            <span className="font-serif italic font-normal">Archive.</span>
+          </h2>
+          <p className="mt-4 text-[15.5px] leading-[1.7] text-[#919198]">
+            {WORK_SECTION_CONTENT.supportingText}
+          </p>
         </div>
 
-        <div className="mt-12 grid grid-cols-1 gap-6 md:grid-cols-2 lg:gap-8">
+        {/* 7-Discipline + All Work Category Filter Strip */}
+        <div
+          role="group"
+          aria-label="Filter portfolio archive by discipline"
+          className="mt-10 flex flex-wrap items-center gap-2 border-y border-[#27272C] py-3.5"
+        >
+          {WORK_CATEGORIES.map((category) => {
+            const isSelected = activeCategory === category.id;
+            const count =
+              category.id === 'all'
+                ? PROJECTS.length
+                : PROJECTS.filter((p) => p.category === category.id).length;
+
+            return (
+              <button
+                key={category.id}
+                type="button"
+                onClick={() => setActiveCategory(category.id)}
+                aria-pressed={isSelected}
+                data-testid={`work-filter-${category.id === 'all' ? 'all' : category.shortLabel.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`}
+                className={`inline-flex min-h-[38px] items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors duration-150 ${
+                  isSelected
+                    ? 'border-[#8B4DFF] bg-[#7C3AED] text-[#F0EFEC]'
+                    : 'border-[#27272C] bg-[#111114] text-[#919198] hover:border-[#8B4DFF]/50 hover:text-[#F0EFEC]'
+                }`}
+              >
+                <span className="sm:hidden">{category.shortLabel}</span>
+                <span className="hidden sm:inline">{category.label}</span>
+                <span
+                  className={`text-[10px] tabular-nums ${
+                    isSelected ? 'text-[#EDE6FF]' : 'text-[#919198]/70'
+                  }`}
+                >
+                  ({count})
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="mt-10 grid grid-cols-1 gap-6 md:grid-cols-2 lg:gap-8">
           {visibleProjects.map((project, idx) => (
             <ProjectCard
               key={project.id}
               project={project}
               orderIndex={idx}
-              onSelect={setSelectedProjectId}
+              featured={activeCategory === 'all' && idx === 0}
+              onSelect={onSelectProjectId}
             />
           ))}
         </div>
@@ -94,7 +119,7 @@ export function SelectedWork() {
 
       <ProjectModal
         project={selectedProject}
-        onClose={() => setSelectedProjectId(null)}
+        onClose={() => onSelectProjectId(null)}
         onNavigate={handleNavigateModal}
       />
     </section>

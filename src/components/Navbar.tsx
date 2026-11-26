@@ -1,124 +1,131 @@
-import { useEffect, useState } from 'react';
 import { Menu, X } from 'lucide-react';
-import { NAV_ITEMS, SITE_IDENTITY } from '../data/portfolio';
+import {
+  ORBITAL_DESTINATIONS,
+  SITE_IDENTITY,
+  type DestinationId,
+} from '../data/portfolio';
+import { SayLogo } from './SayLogo';
 
 interface NavbarProps {
   activeSection: string;
-  onSectionSelect?: (sectionId: string) => void;
+  mobileMenuOpen: boolean;
+  onToggleMobileMenu: () => void;
+  onReturnHome: () => void;
+  onNavigateDestination: (id: DestinationId) => void;
 }
 
-export function Navbar({ activeSection, onSectionSelect }: NavbarProps) {
-  const [mobileOpen, setMobileOpen] = useState(false);
+const PRIMARY_NAV_DESTINATIONS = ORBITAL_DESTINATIONS.filter(
+  (dest) => dest.id !== 'contact',
+);
 
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        setMobileOpen(false);
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
-
-  const handleLinkClick = (sectionId?: string) => {
-    if (sectionId) {
-      onSectionSelect?.(sectionId);
-    }
-    setMobileOpen(false);
-  };
-
+export function Navbar({
+  activeSection,
+  mobileMenuOpen,
+  onToggleMobileMenu,
+  onReturnHome,
+  onNavigateDestination,
+}: NavbarProps) {
   return (
-    <header className="sticky top-0 z-40 border-b border-[#27272C] bg-[#0B0B0D]/90 backdrop-blur-md">
-      <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-8 px-5 sm:px-8 lg:px-10">
+    <header className="sticky top-0 z-40 border-b border-[#27272C] bg-[#0B0B0D]/95 backdrop-blur-md">
+      <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-4 px-5 sm:px-8 lg:px-10">
+        {/* Zone 1: Authentic SAY vector brand anchor + subtle tagline */}
         <a
           href="#home"
-          onClick={() => handleLinkClick('home')}
-          className="font-sans text-lg font-semibold tracking-tight text-[#F0EFEC] whitespace-nowrap shrink-0 transition-colors hover:text-[#4E7EFF]"
-          aria-label="SQ. Sayem Quadri Home"
+          onClick={(e) => {
+            e.preventDefault();
+            onReturnHome();
+          }}
+          className="group flex items-center gap-3 whitespace-nowrap shrink-0 rounded-md py-1"
+          aria-label="SAY — Sayem Quadri Home"
         >
-          {SITE_IDENTITY.monogram}
+          <SayLogo className="h-7 w-auto transition-transform duration-200 group-hover:scale-[1.03]" />
+          <span
+            aria-hidden="true"
+            className="hidden h-4 w-px bg-[#27272C] lg:inline-block"
+          />
+          <span className="hidden text-[11px] font-medium tracking-[0.14em] text-[#919198] lg:inline">
+            {SITE_IDENTITY.tagline}
+          </span>
         </a>
 
+        {/* Zone 2: Clean desktop navigation links */}
         <nav
-          aria-label="Primary Navigation"
-          className="hidden md:flex items-center gap-7"
+          aria-label="Primary sections"
+          className="hidden items-center gap-1 md:flex"
         >
-          {NAV_ITEMS.map((item) => {
-            const isActive = activeSection === item.id;
+          {PRIMARY_NAV_DESTINATIONS.map((dest) => {
+            const isActive = activeSection === dest.id;
+            const navLabel =
+              dest.id === 'work'
+                ? 'Work'
+                : dest.id === 'creative'
+                  ? 'Creative'
+                  : dest.id === 'experiments'
+                    ? 'Experiments'
+                    : 'About';
+
             return (
               <a
-                key={item.id}
-                href={item.href}
-                onClick={() => handleLinkClick(item.id)}
+                key={dest.id}
+                href={dest.href}
+                onClick={(e) => {
+                  e.preventDefault();
+                  onNavigateDestination(dest.id);
+                }}
                 aria-current={isActive ? 'location' : undefined}
-                className={`relative inline-flex min-h-[40px] items-center py-2 text-[13.5px] font-medium tracking-wide whitespace-nowrap shrink-0 transition-colors duration-200 ${
+                className={`relative rounded-lg px-3.5 py-2 text-xs font-medium tracking-[0.06em] whitespace-nowrap transition-colors ${
                   isActive
-                    ? 'text-[#F0EFEC]'
+                    ? 'text-[#C4A7FF]'
                     : 'text-[#919198] hover:text-[#F0EFEC]'
                 }`}
               >
-                {item.label}
-                <span
-                  aria-hidden="true"
-                  className={`absolute inset-x-0 bottom-1 h-[1.5px] origin-left bg-[#4E7EFF] transition-transform duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] ${
-                    isActive ? 'scale-x-100' : 'scale-x-0'
-                  }`}
-                />
+                {navLabel}
+                {isActive && (
+                  <span
+                    aria-hidden="true"
+                    className="absolute inset-x-3.5 bottom-0.5 h-[1.5px] bg-[#9D6BFF]"
+                  />
+                )}
               </a>
             );
           })}
         </nav>
 
-        <button
-          type="button"
-          onClick={() => setMobileOpen((prev) => !prev)}
-          aria-expanded={mobileOpen}
-          aria-controls="mobile-navigation-drawer"
-          aria-label={mobileOpen ? 'Close navigation menu' : 'Open navigation menu'}
-          className="inline-flex h-11 w-11 items-center justify-center rounded-lg border border-[#27272C] bg-[#111114] text-[#F0EFEC] transition-colors hover:border-[#4E7EFF]/60 md:hidden shrink-0"
-        >
-          {mobileOpen ? <X className="h-5 w-5" aria-hidden="true" /> : <Menu className="h-5 w-5" aria-hidden="true" />}
-        </button>
-      </div>
+        {/* Zone 3: Contact action on desktop + minimalist hamburger overlay trigger on mobile */}
+        <div className="relative flex items-center gap-2 shrink-0">
+          <a
+            href="#contact"
+            onClick={(e) => {
+              e.preventDefault();
+              onNavigateDestination('contact');
+            }}
+            aria-current={activeSection === 'contact' ? 'location' : undefined}
+            className={`hidden min-h-[38px] items-center rounded-lg border px-4 py-1.5 text-xs font-medium tracking-[0.06em] whitespace-nowrap transition-colors md:inline-flex ${
+              activeSection === 'contact'
+                ? 'border-[#8B4DFF] bg-[#7C3AED] text-[#F0EFEC]'
+                : 'border-[#27272C] bg-[#111114] text-[#F0EFEC] hover:border-[#8B4DFF]/70 hover:text-[#C4A7FF]'
+            }`}
+          >
+            Contact
+          </a>
 
-      {mobileOpen && (
-        <nav
-          id="mobile-navigation-drawer"
-          aria-label="Mobile Navigation"
-          className="border-t border-[#27272C] bg-[#0B0B0D] px-5 py-4 md:hidden"
-        >
-          <ul className="flex flex-col divide-y divide-[#27272C]/70">
-            {NAV_ITEMS.map((item) => {
-              const isActive = activeSection === item.id;
-              return (
-                <li key={item.id}>
-                  <a
-                    href={item.href}
-                    onClick={() => handleLinkClick(item.id)}
-                    aria-current={isActive ? 'location' : undefined}
-                    className={`flex min-h-[44px] items-center justify-between py-2.5 text-base font-medium transition-colors ${
-                      isActive ? 'text-[#4E7EFF]' : 'text-[#F0EFEC]/90 hover:text-[#F0EFEC]'
-                    }`}
-                  >
-                    <span>{item.label}</span>
-                    <span className="text-xs text-[#919198] tabular-nums">
-                      {item.id === 'home'
-                        ? '00'
-                        : item.id === 'about'
-                          ? '01'
-                          : item.id === 'work'
-                            ? '02'
-                            : item.id === 'beyond'
-                              ? '03'
-                              : '04'}
-                    </span>
-                  </a>
-                </li>
-              );
-            })}
-          </ul>
-        </nav>
-      )}
+          <button
+            type="button"
+            onClick={onToggleMobileMenu}
+            aria-expanded={mobileMenuOpen}
+            aria-controls="mobile-nav-overlay"
+            aria-label={mobileMenuOpen ? 'Close navigation menu' : 'Open navigation menu'}
+            className="inline-flex min-h-[44px] items-center gap-2 rounded-lg border border-[#27272C] bg-[#111114] px-3.5 py-2 text-xs font-medium tracking-[0.08em] text-[#F0EFEC] whitespace-nowrap shrink-0 transition-colors hover:border-[#8B4DFF]/70 md:hidden"
+          >
+            {mobileMenuOpen ? (
+              <X className="h-4 w-4 text-[#C4A7FF]" aria-hidden="true" />
+            ) : (
+              <Menu className="h-4 w-4 text-[#C4A7FF]" aria-hidden="true" />
+            )}
+            <span>Menu</span>
+          </button>
+        </div>
+      </div>
     </header>
   );
 }

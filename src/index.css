@@ -8,7 +8,9 @@
   --color-text-primary: #F0EFEC;
   --color-text-secondary: #919198;
   --color-border-hairline: #27272C;
-  --color-accent-blue: #4E7EFF;
+  --color-accent-purple: #7C3AED;
+  --color-accent-violet: #9D6BFF;
+  --color-accent-lavender: #C4A7FF;
 }
 
 @layer base {
@@ -40,7 +42,7 @@
   }
 
   :focus-visible {
-    outline: 2px solid #4E7EFF;
+    outline: 2px solid #9D6BFF;
     outline-offset: 3px;
   }
 }
@@ -65,4 +67,18 @@
 .animate-scroll-line {
   animation: scroll-line-pulse 2.4s cubic-bezier(0.16, 1, 0.3, 1) infinite;
   will-change: transform, opacity;
+}
+
+@keyframes say-orbit-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-say-orbit {
+  animation: say-orbit-spin 2.2s linear infinite;
+  will-change: transform;
 }

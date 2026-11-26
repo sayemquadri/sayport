@@ -95,14 +95,14 @@ const NODE_FRAGMENT_SHADER = /* glsl */ `
 
       float lum = clamp(core * 1.15 + halo + glint, 0.0, 1.0);
       alpha = clamp(lum * (vAlpha + vHoverGlow * 0.22) * vFlicker, 0.0, 1.0) * uReveal;
-      col = mix(vColor, vec3(0.98, 0.99, 1.0), core * 0.55);
-      col = mix(col, vec3(0.68, 0.84, 1.0), vHoverGlow * 0.38);
+      col = mix(vColor, vec3(0.98, 0.98, 1.0), core * 0.55);
+      col = mix(col, vec3(0.76, 0.60, 1.0), vHoverGlow * 0.42);
     } else {
       // Secondary path micro-particles & distant faint stars
       float core = exp(-d * d * 22.0);
       float soft = smoothstep(0.48, 0.15, d) * 0.18;
       alpha = clamp((core + soft) * (vAlpha + vHoverGlow * 0.28) * vFlicker, 0.0, 1.0) * uReveal;
-      col = mix(vColor, vec3(0.75, 0.88, 1.0), vHoverGlow * 0.42);
+      col = mix(vColor, vec3(0.80, 0.65, 1.0), vHoverGlow * 0.45);
     }
 
     if (alpha < 0.01) discard;
@@ -188,14 +188,14 @@ const LINE_FRAGMENT_SHADER = /* glsl */ `
       float pulse = exp(-dist * dist * 54.0);
       float endFade = smoothstep(0.0, 0.12, pulsePos) * smoothstep(1.0, 0.88, pulsePos);
       float energy = pulse * endFade;
-      col = mix(col, vec3(0.60, 0.80, 1.0), energy * 0.78);
+      col = mix(col, vec3(0.68, 0.48, 1.0), energy * 0.80);
       alpha += energy * 0.30;
     }
 
     // Subtle light response across connected paths near pointer hover
     float hoverDist = length(vLocalXY - uHoverXY);
     float hoverResponse = exp(-hoverDist * hoverDist * 13.0) * uHoverActive;
-    col = mix(col, vec3(0.68, 0.84, 1.0), hoverResponse * 0.65);
+    col = mix(col, vec3(0.76, 0.60, 1.0), hoverResponse * 0.68);
     alpha += hoverResponse * 0.32;
 
     gl_FragColor = vec4(col, clamp(alpha, 0.0, 0.96) * uReveal);
@@ -284,10 +284,11 @@ function scheduleAnimationFrame(
 }
 
 function sampleImageToBuffer(img: HTMLImageElement): PortraitImageBuffer {
-  const targetSize = 560;
+  const targetWidth = Math.max(1, img.naturalWidth || 1254);
+  const targetHeight = Math.max(1, img.naturalHeight || 1254);
   const offscreen = document.createElement('canvas');
-  offscreen.width = targetSize;
-  offscreen.height = targetSize;
+  offscreen.width = targetWidth;
+  offscreen.height = targetHeight;
 
   const ctx = offscreen.getContext('2d', { willReadFrequently: true });
   if (!ctx) {
@@ -295,13 +296,13 @@ function sampleImageToBuffer(img: HTMLImageElement): PortraitImageBuffer {
   }
 
   ctx.fillStyle = '#FFFFFF';
-  ctx.fillRect(0, 0, targetSize, targetSize);
-  ctx.drawImage(img, 0, 0, targetSize, targetSize);
-  const imageData = ctx.getImageData(0, 0, targetSize, targetSize);
+  ctx.fillRect(0, 0, targetWidth, targetHeight);
+  ctx.drawImage(img, 0, 0, targetWidth, targetHeight);
+  const imageData = ctx.getImageData(0, 0, targetWidth, targetHeight);
 
   return {
-    width: targetSize,
-    height: targetSize,
+    width: targetWidth,
+    height: targetHeight,
     data: imageData.data,
   };
 }
@@ -330,8 +331,8 @@ function renderStaticLineDotDataUrl(data: LineDotPortraitData, size = 930): stri
       const p = projectPerspectivePoint(rx, ry, rz, CAMERA_Z, CAMERA_FOV, size);
 
       ctx.fillStyle = sat.isAccent
-        ? 'rgba(118, 166, 255, 0.85)'
-        : 'rgba(228, 234, 246, 0.78)';
+        ? 'rgba(164, 114, 255, 0.88)'
+        : 'rgba(228, 228, 240, 0.78)';
       ctx.beginPath();
       ctx.arc(p.x, p.y, sat.size * 0.48 * sizeScale, 0, Math.PI * 2);
       ctx.fill();
@@ -406,9 +407,19 @@ function renderStaticLineDotDataUrl(data: LineDotPortraitData, size = 930): stri
   return offscreen.toDataURL('image/png');
 }
 
-export function CelestialPortrait() {
+interface CelestialPortraitProps {
+  className?: string;
+  onMiniPortraitReady?: (dataUrl: string) => void;
+}
+
+export function CelestialPortrait({
+  className = '',
+  onMiniPortraitReady,
+}: CelestialPortraitProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mountRef = useRef<HTMLDivElement | null>(null);
+  const miniCallbackRef = useRef(onMiniPortraitReady);
+  miniCallbackRef.current = onMiniPortraitReady;
 
   const [portraitData, setPortraitData] = useState<LineDotPortraitData | null>(null);
   const [prefersReducedMotion, setPrefersReducedMotion] = useState<boolean>(() =>
@@ -445,6 +456,9 @@ export function CelestialPortrait() {
       if (buffer.width > 0 && buffer.height > 0) {
         const built = buildLineDotPortrait(buffer, 20261121);
         setPortraitData(built);
+        if (miniCallbackRef.current) {
+          miniCallbackRef.current(renderStaticLineDotDataUrl(built, 240));
+        }
       }
     };
 
@@ -634,7 +648,7 @@ export function CelestialPortrait() {
           uniforms: {
             uPixelRatio: { value: pixelRatio },
             uScaleFactor: pointsUniforms.uScaleFactor,
-            uColor: { value: new THREE.Color(sat.isAccent ? 0x6ea0ff : 0xe4eaf6) },
+            uColor: { value: new THREE.Color(sat.isAccent ? 0xa06bff : 0xe6e4f2) },
             uOpacity: { value: 0 },
           },
           vertexShader: SATELLITE_VERTEX_SHADER,
@@ -964,7 +978,9 @@ export function CelestialPortrait() {
       data-render-mode={showStaticFallback ? 'static' : 'webgl'}
       aria-hidden="true"
       style={{ touchAction: 'pan-y' }}
-      className="relative h-[330px] w-[330px] max-w-full shrink-0 select-none [contain:layout_paint] [transform:translateZ(0)] sm:h-[390px] sm:w-[390px] lg:h-[465px] lg:w-[465px]"
+      className={`relative aspect-square w-full shrink-0 select-none [contain:layout_paint] [transform:translateZ(0)] ${
+        className || 'max-w-[330px] sm:max-w-[390px] lg:max-w-[465px]'
+      }`}
     >
       {/* Minimalist concentric hairline framing */}
       <div className="pointer-events-none absolute inset-4 rounded-full border border-[#27272C]/45" />

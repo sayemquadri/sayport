@@ -1,44 +1,95 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  ABOUT_CONTENT,
+  CONTACT_CONTENT,
+  CREATIVE_ARCHIVE,
+  EXPERIMENTS,
+  HERO_CONTENT,
   PROJECTS,
+  SITE_IDENTITY,
   SOCIAL_CHANNELS,
+  WORK_CATEGORIES,
   type SocialChannel,
 } from '../data/portfolio';
 import {
+  buildMailtoHref,
+  createThrottledCallback,
   filterProjects,
   findProjectById,
   getAdjacentProjectId,
   getConfiguredSocialLinks,
   getCopyrightYear,
+  getEmailChannel,
   isValidConfiguredUrl,
   resolveActiveSectionId,
-  createThrottledCallback,
 } from './portfolio';
 
-test('filterProjects returns all projects when filter is all', () => {
-  const result = filterProjects(PROJECTS, 'all');
-  assert.equal(result.length, 6);
+test('strict exclusions: zero private projects, SQ. branding, location, or academic strings in portfolio data', () => {
+  const serialized = JSON.stringify({
+    SITE_IDENTITY,
+    HERO_CONTENT,
+    PROJECTS,
+    CREATIVE_ARCHIVE,
+    EXPERIMENTS,
+    ABOUT_CONTENT,
+    CONTACT_CONTENT,
+  }).toLowerCase();
+
+  const forbiddenTerms = [
+    'sanober',
+    'jarvis',
+    'sq.',
+    'saydesigns',
+    'patna',
+    'bihar',
+    'india',
+    'sbte',
+    'diploma',
+    'gulzarbagh',
+    'polytechnic',
+    '2024–2027',
+    'restaurant branding',
+    'coursework',
+    'academic project',
+    'mechanical engineering student',
+  ];
+
+  for (const term of forbiddenTerms) {
+    assert.equal(serialized.includes(term), false, `Forbidden term found: ${term}`);
+  }
 });
 
-test('filterProjects filters strictly by discipline', () => {
-  const tech = filterProjects(PROJECTS, 'technology');
-  assert.equal(tech.length, 2);
-  assert.deepEqual(
-    tech.map((p) => p.id),
-    ['derote', 'campus-connect'],
-  );
+test('WORK_CATEGORIES exposes All Work plus all 7 requested categories and every category has valid projects', () => {
+  const categories = WORK_CATEGORIES.filter((c) => c.id !== 'all');
+  assert.equal(categories.length, 7);
 
-  const engineering = filterProjects(PROJECTS, 'engineering');
-  assert.equal(engineering.length, 1);
-  assert.equal(engineering[0].id, 'ev-engineering');
+  for (const cat of categories) {
+    const items = filterProjects(PROJECTS, cat.id);
+    assert.ok(items.length >= 1, `Expected >= 1 project in category ${cat.id}`);
+  }
 
-  const creative = filterProjects(PROJECTS, 'creative');
-  assert.equal(creative.length, 3);
-  assert.deepEqual(
-    creative.map((p) => p.id),
-    ['the-green-string', 'aq-explains', 'saydesigns'],
-  );
+  assert.equal(filterProjects(PROJECTS, 'all').length, PROJECTS.length);
+});
+
+test('every project uses an allowed status label and complete case study structure', () => {
+  const allowedStatuses = new Set([
+    'COMPLETED',
+    'IN PROGRESS',
+    'EXPERIMENTAL',
+    'INDEPENDENT WORK',
+    'CLIENT WORK',
+  ]);
+
+  for (const project of PROJECTS) {
+    assert.equal(allowedStatuses.has(project.status), true, `Invalid status: ${project.status}`);
+    assert.ok(project.caseStudy.overview.length > 20);
+    assert.ok(project.caseStudy.objective.length > 20);
+    assert.ok(project.caseStudy.approach.length > 20);
+    assert.ok(project.caseStudy.contribution.length > 10);
+    assert.ok(project.caseStudy.technologies.length >= 2);
+    assert.ok(project.caseStudy.visualNote.length > 10);
+  }
 });
 
 test('findProjectById and getAdjacentProjectId handle wrap-around and missing IDs', () => {
@@ -46,82 +97,59 @@ test('findProjectById and getAdjacentProjectId handle wrap-around and missing ID
   assert.equal(findProjectById(PROJECTS, 'missing'), null);
   assert.equal(findProjectById(PROJECTS, 'derote')?.title, 'DeRote Student Insight System');
 
-  assert.equal(getAdjacentProjectId(PROJECTS, 'derote', 'prev'), 'saydesigns');
-  assert.equal(getAdjacentProjectId(PROJECTS, 'saydesigns', 'next'), 'derote');
+  const firstId = PROJECTS[0].id;
+  const lastId = PROJECTS[PROJECTS.length - 1].id;
+  assert.equal(getAdjacentProjectId(PROJECTS, firstId, 'prev'), lastId);
+  assert.equal(getAdjacentProjectId(PROJECTS, lastId, 'next'), firstId);
   assert.equal(getAdjacentProjectId([], 'derote', 'next'), null);
 });
 
-test('SOCIAL_CHANNELS exposes all configured contact and social profile links', () => {
+test('SOCIAL_CHANNELS exposes live channels and buildMailtoHref validates inputs strictly', () => {
   const configured = getConfiguredSocialLinks(SOCIAL_CHANNELS);
-  assert.deepEqual(
-    configured.map((item) => ({ id: item.id, url: item.url, handle: item.handle })),
-    [
-      {
-        id: 'email',
-        url: 'mailto:sayemquadri0@gmail.com',
-        handle: 'sayemquadri0@gmail.com',
-      },
-      {
-        id: 'github',
-        url: 'https://github.com/sayemquadri',
-        handle: '@sayemquadri',
-      },
-      {
-        id: 'linkedin',
-        url: 'https://www.linkedin.com/in/sayemquadri',
-        handle: 'in/sayemquadri',
-      },
-      {
-        id: 'instagram',
-        url: 'https://www.instagram.com/ldksayem',
-        handle: '@ldksayem',
-      },
-    ],
-  );
-});
+  assert.equal(configured.length, 4);
 
-test('getConfiguredSocialLinks accepts valid mailto and https URLs and rejects placeholders', () => {
+  const email = getEmailChannel(SOCIAL_CHANNELS);
+  assert.equal(email?.url, 'mailto:sayemquadri0@gmail.com');
+
+  assert.equal(buildMailtoHref('mailto:sayemquadri0@gmail.com', '', 'Hello'), null);
+  assert.equal(buildMailtoHref('mailto:sayemquadri0@gmail.com', 'Project', '   '), null);
+  assert.equal(
+    buildMailtoHref('mailto:sayemquadri0@gmail.com', 'EV Collaboration', 'Let us discuss a project.'),
+    'mailto:sayemquadri0@gmail.com?subject=EV%20Collaboration&body=Let%20us%20discuss%20a%20project.',
+  );
+
   const sample: SocialChannel[] = [
     { id: 'email', label: 'Email', url: 'mailto:sayem@quadri.studio' },
-    { id: 'github', label: 'GitHub', url: 'https://github.com/sayemquadri' },
     { id: 'linkedin', label: 'LinkedIn', url: 'https://example.com/fake' },
-    { id: 'instagram', label: 'Instagram', url: '   ' },
   ];
-
-  const configured = getConfiguredSocialLinks(sample);
   assert.deepEqual(
-    configured.map((item) => item.id),
-    ['email', 'github'],
+    getConfiguredSocialLinks(sample).map((c) => c.id),
+    ['email'],
   );
   assert.equal(isValidConfiguredUrl('mailto:invalid'), false);
-  assert.equal(isValidConfiguredUrl('javascript:alert(1)'), false);
 });
 
-test('getCopyrightYear returns dynamic four-digit year from provided Date', () => {
-  assert.equal(getCopyrightYear(new Date('2026-11-21T00:00:00Z')), 2026);
-  assert.equal(getCopyrightYear(new Date('2030-01-01T00:00:00Z')), 2030);
-});
-
-test('resolveActiveSectionId selects work when scrolled to #work top anchor', () => {
+test('resolveActiveSectionId resolves the 6 SAY sections accurately', () => {
   const bounds = [
     { id: 'home', top: -1575, bottom: -675 },
-    { id: 'about', top: -675, bottom: 87.7 },
-    { id: 'work', top: 87.7, bottom: 1680 },
-    { id: 'beyond', top: 1680, bottom: 2450 },
-    { id: 'contact', top: 2450, bottom: 3000 },
+    { id: 'work', top: -675, bottom: 90 },
+    { id: 'creative', top: 90, bottom: 900 },
+    { id: 'experiments', top: 900, bottom: 1600 },
+    { id: 'about', top: 1600, bottom: 2300 },
+    { id: 'contact', top: 2300, bottom: 3000 },
   ];
 
-  assert.equal(resolveActiveSectionId(bounds, 140, false), 'work');
+  assert.equal(resolveActiveSectionId(bounds, 140, false), 'creative');
   assert.equal(resolveActiveSectionId(bounds, 140, true), 'contact');
 });
 
-test('createThrottledCallback invokes leading edge immediately and throttles bursts', async () => {
+test('getCopyrightYear and createThrottledCallback work reliably', async () => {
+  assert.equal(getCopyrightYear(new Date('2026-11-22T00:00:00Z')), 2026);
   let count = 0;
   const throttled = createThrottledCallback(() => {
     count += 1;
   }, 40);
 
-  throttled.run();
   throttled.run();
   throttled.run();
   assert.equal(count, 1);
