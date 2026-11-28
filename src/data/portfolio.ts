@@ -4,6 +4,17 @@ export type WorkCategory =
   | 'Research & Engineering'
   | 'Writing & Media';
 
+export type ProjectVisualMotif =
+  | 'derote'
+  | 'say-orbit'
+  | 'campus'
+  | 'ev'
+  | 'green-string'
+  | 'voice-reel'
+  | 'aq-explains'
+  | 'ai-proto'
+  | 'constellation';
+
 export type ProjectStatusLabel =
   | 'DEPLOYED · TESTING'
   | 'COMPLETED · PRACTICE BUILD'
