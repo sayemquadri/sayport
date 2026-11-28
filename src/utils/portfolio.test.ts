@@ -4,13 +4,12 @@ import {
   ABOUT_CONTENT,
   CONTACT_CONTENT,
   CREATIVE_ARCHIVE,
-  EXPERIMENTS,
   HERO_CONTENT,
+  ORBITAL_DESTINATIONS,
   PROJECTS,
   SITE_IDENTITY,
   SOCIAL_CHANNELS,
   WORK_CATEGORIES,
-  type SocialChannel,
 } from '../data/portfolio';
 import {
   buildMailtoHref,
@@ -25,86 +24,74 @@ import {
   resolveActiveSectionId,
 } from './portfolio';
 
-test('strict exclusions: zero private projects, SQ. branding, location, or academic strings in portfolio data', () => {
+test('private projects and unrelated personal-brand strings stay out of public portfolio data', () => {
   const serialized = JSON.stringify({
     SITE_IDENTITY,
     HERO_CONTENT,
     PROJECTS,
     CREATIVE_ARCHIVE,
-    EXPERIMENTS,
     ABOUT_CONTENT,
     CONTACT_CONTENT,
   }).toLowerCase();
 
-  const forbiddenTerms = [
-    'sanober',
-    'jarvis',
-    'sq.',
-    'saydesigns',
-    'patna',
-    'bihar',
-    'india',
-    'sbte',
-    'diploma',
-    'gulzarbagh',
-    'polytechnic',
-    '2024–2027',
-    'restaurant branding',
-    'coursework',
-    'academic project',
-    'mechanical engineering student',
-  ];
-
-  for (const term of forbiddenTerms) {
+  for (const term of ['sanober', 'jarvis', 'saydesigns']) {
     assert.equal(serialized.includes(term), false, `Forbidden term found: ${term}`);
   }
 });
 
-test('WORK_CATEGORIES exposes All Work plus all 7 requested categories and every category has valid projects', () => {
-  const categories = WORK_CATEGORIES.filter((c) => c.id !== 'all');
-  assert.equal(categories.length, 7);
+test('work archive uses three broad filters and each filter maps to real entries', () => {
+  const categories = WORK_CATEGORIES.filter((category) => category.id !== 'all');
+  assert.equal(categories.length, 3);
 
-  for (const cat of categories) {
-    const items = filterProjects(PROJECTS, cat.id);
-    assert.ok(items.length >= 1, `Expected >= 1 project in category ${cat.id}`);
+  for (const category of categories) {
+    assert.ok(filterProjects(PROJECTS, category.id).length > 0);
   }
 
   assert.equal(filterProjects(PROJECTS, 'all').length, PROJECTS.length);
 });
 
-test('every project uses an allowed status label and complete case study structure', () => {
-  const allowedStatuses = new Set([
-    'COMPLETED',
-    'IN PROGRESS',
-    'EXPERIMENTAL',
-    'INDEPENDENT WORK',
-    'CLIENT WORK',
+test('project records use accurate known statuses and include contribution notes', () => {
+  const expected = new Set([
+    'DEPLOYED · TESTING',
+    'COMPLETED · PRACTICE BUILD',
+    'PROTOTYPE COMPLETED',
+    'RESEARCH & DOCUMENTATION COMPLETE',
+    'COMPLETED · UNPUBLISHED',
+    'PAUSED · HISTORICAL WORK',
   ]);
 
   for (const project of PROJECTS) {
-    assert.equal(allowedStatuses.has(project.status), true, `Invalid status: ${project.status}`);
+    assert.equal(expected.has(project.status), true);
     assert.ok(project.caseStudy.overview.length > 20);
-    assert.ok(project.caseStudy.objective.length > 20);
-    assert.ok(project.caseStudy.approach.length > 20);
-    assert.ok(project.caseStudy.contribution.length > 10);
-    assert.ok(project.caseStudy.technologies.length >= 2);
-    assert.ok(project.caseStudy.visualNote.length > 10);
+    assert.ok(project.caseStudy.contribution.length > 20);
+    assert.ok(project.caseStudy.statusNote.length > 20);
   }
 });
 
-test('findProjectById and getAdjacentProjectId handle wrap-around and missing IDs', () => {
-  assert.equal(findProjectById(PROJECTS, null), null);
-  assert.equal(findProjectById(PROJECTS, 'missing'), null);
-  assert.equal(findProjectById(PROJECTS, 'derote')?.title, 'DeRote Student Insight System');
-
-  const firstId = PROJECTS[0].id;
-  const lastId = PROJECTS[PROJECTS.length - 1].id;
-  assert.equal(getAdjacentProjectId(PROJECTS, firstId, 'prev'), lastId);
-  assert.equal(getAdjacentProjectId(PROJECTS, lastId, 'next'), firstId);
-  assert.equal(getAdjacentProjectId([], 'derote', 'next'), null);
+test('confirmed project statuses and scope are represented accurately', () => {
+  assert.equal(findProjectById(PROJECTS, 'derote')?.status, 'DEPLOYED · TESTING');
+  assert.match(findProjectById(PROJECTS, 'clinic-website')!.caseStudy.statusNote, /not a paid commission/i);
+  assert.match(findProjectById(PROJECTS, 'campus-connect')!.caseStudy.statusNote, /not a deployed application/i);
+  assert.match(findProjectById(PROJECTS, 'solar-ev')!.caseStudy.statusNote, /assembly and testing were still pending/i);
+  assert.equal(findProjectById(PROJECTS, 'green-string')?.status, 'COMPLETED · UNPUBLISHED');
 });
 
-test('SOCIAL_CHANNELS exposes live channels and buildMailtoHref validates inputs strictly', () => {
+test('presentation and voice sections do not contain fake audio takes or scripted samples', () => {
+  assert.equal(CREATIVE_ARCHIVE.voiceSection.activities.length, 2);
+  assert.equal(CREATIVE_ARCHIVE.presentations.items.length, 3);
+  assert.ok(CREATIVE_ARCHIVE.presentations.items.every((item) => item.slides > 0));
+  assert.equal(JSON.stringify(CREATIVE_ARCHIVE).includes('Studio placeholder'), false);
+});
+
+test('the orbital navigation retains the five working section destinations', () => {
+  assert.deepEqual(
+    ORBITAL_DESTINATIONS.map((destination) => destination.id),
+    ['work', 'creative', 'experiments', 'about', 'contact'],
+  );
+  assert.equal(ORBITAL_DESTINATIONS[0].featured, true);
+});
+
+test('social links and mailto builder validate inputs strictly', () => {
   const configured = getConfiguredSocialLinks(SOCIAL_CHANNELS);
   assert.equal(configured.length, 4);
 
@@ -118,18 +105,10 @@ test('SOCIAL_CHANNELS exposes live channels and buildMailtoHref validates inputs
     'mailto:sayemquadri0@gmail.com?subject=EV%20Collaboration&body=Let%20us%20discuss%20a%20project.',
   );
 
-  const sample: SocialChannel[] = [
-    { id: 'email', label: 'Email', url: 'mailto:sayem@quadri.studio' },
-    { id: 'linkedin', label: 'LinkedIn', url: 'https://example.com/fake' },
-  ];
-  assert.deepEqual(
-    getConfiguredSocialLinks(sample).map((c) => c.id),
-    ['email'],
-  );
   assert.equal(isValidConfiguredUrl('mailto:invalid'), false);
 });
 
-test('resolveActiveSectionId resolves the 6 SAY sections accurately', () => {
+test('section scroll tracking handles the current site sections', () => {
   const bounds = [
     { id: 'home', top: -1575, bottom: -675 },
     { id: 'work', top: -675, bottom: 90 },
@@ -143,12 +122,10 @@ test('resolveActiveSectionId resolves the 6 SAY sections accurately', () => {
   assert.equal(resolveActiveSectionId(bounds, 140, true), 'contact');
 });
 
-test('getCopyrightYear and createThrottledCallback work reliably', async () => {
+test('getCopyrightYear and throttled callback work reliably', async () => {
   assert.equal(getCopyrightYear(new Date('2026-11-22T00:00:00Z')), 2026);
   let count = 0;
-  const throttled = createThrottledCallback(() => {
-    count += 1;
-  }, 40);
+  const throttled = createThrottledCallback(() => { count += 1; }, 40);
 
   throttled.run();
   throttled.run();

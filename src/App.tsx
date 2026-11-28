@@ -138,7 +138,7 @@ export default function App() {
               onSelectProjectId={setSelectedProjectId}
             />
 
-            <CreativeSection onOpenProject={setSelectedProjectId} />
+            <CreativeSection />
 
             <ExperimentsSection
               miniPortraitUrl={miniPortraitUrl}

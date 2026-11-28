@@ -1,19 +1,8 @@
 export type WorkCategory =
   | 'all'
-  | 'Design & Digital Experiences'
-  | 'Development & Technology'
+  | 'Build & Design'
   | 'Research & Engineering'
-  | 'Writing & Storytelling'
-  | 'Voice, Dubbing & Narration'
-  | 'Presentations & Communication'
-  | 'Experiments & Explorations';
-
-export type ProjectStatusLabel =
-  | 'COMPLETED'
-  | 'IN PROGRESS'
-  | 'EXPERIMENTAL'
-  | 'INDEPENDENT WORK'
-  | 'CLIENT WORK';
+  | 'Writing & Media';
 
 export type ProjectVisualMotif =
   | 'derote'
@@ -25,6 +14,14 @@ export type ProjectVisualMotif =
   | 'aq-explains'
   | 'ai-proto'
   | 'constellation';
+
+export type ProjectStatusLabel =
+  | 'DEPLOYED · TESTING'
+  | 'COMPLETED · PRACTICE BUILD'
+  | 'PROTOTYPE COMPLETED'
+  | 'RESEARCH & DOCUMENTATION COMPLETE'
+  | 'COMPLETED · UNPUBLISHED'
+  | 'PAUSED · HISTORICAL WORK';
 
 export type DestinationId =
   | 'work'
@@ -41,35 +38,18 @@ export interface OrbitalDestination {
   subtitle: string;
   href: `#${DestinationId}`;
   featured?: boolean;
-  /** Normalized radius multiplier relative to portrait container radius */
   rxFactor: number;
   ryFactor: number;
-  /** Ellipse tilt angle in degrees */
   tiltDeg: number;
-  /** Angular speed in radians per second along the ellipse */
   speedRadPerSec: number;
-  /** Initial orbital phase in radians */
   initialAngle: number;
-}
-
-export interface ProjectMediaAttachment {
-  kind: 'image' | 'video' | 'audio' | 'link';
-  label: string;
-  url?: string;
-  note: string;
 }
 
 export interface ProjectCaseStudy {
   overview: string;
-  objective: string;
-  approach: string;
   contribution: string;
+  statusNote: string;
   technologies: string[];
-  visualNote: string;
-  isConceptualMedia: boolean;
-  mediaAttachments?: ProjectMediaAttachment[];
-  liveUrl?: string;
-  sourceUrl?: string;
 }
 
 export interface ProjectItem {
@@ -80,65 +60,23 @@ export interface ProjectItem {
   description: string;
   highlights: string[];
   status: ProjectStatusLabel;
-  motif: ProjectVisualMotif;
   caseStudy: ProjectCaseStudy;
-}
-
-export interface VoiceTrack {
-  id: string;
-  code: string;
-  title: string;
-  category: string;
-  durationLabel: string;
-  audioUrl?: string;
-  directionNote: string;
-  scriptLine: string;
-  placeholderNote: string;
-}
-
-export interface StoryAnalysisItem {
-  id: string;
-  code: string;
-  medium: string;
-  title: string;
-  thesis: string;
-  notes: string[];
 }
 
 export interface PresentationItem {
   id: string;
-  code: string;
   title: string;
-  audienceContext: string;
-  structureSummary: string;
-  deckUrl?: string;
-}
-
-export type ExperimentStatus = 'PROTOTYPE' | 'EXPERIMENTAL' | 'PROOF OF CONCEPT';
-
-export type ExperimentDemoKind =
-  | 'celestial-portrait'
-  | 'availability-pulse'
-  | 'kinetic-type'
-  | 'script-storyboard';
-
-export interface ExperimentItem {
-  id: string;
-  index: string;
-  name: string;
-  explanation: string;
-  technologies: string[];
-  status: ExperimentStatus;
-  demoKind: ExperimentDemoKind;
-  note: string;
+  slides: number;
+  subject: string;
+  description: string;
+  role: string;
 }
 
 export interface DisciplineItem {
   id: string;
-  index: string;
   title: string;
   summary: string;
-  highlights: string[];
+  evidence: string;
 }
 
 export interface SocialChannel {
@@ -151,10 +89,10 @@ export interface SocialChannel {
 export const SITE_IDENTITY = {
   brand: 'SAY',
   owner: 'Sayem Quadri',
-  positioning: 'Multidisciplinary Creator, Researcher & Builder',
+  positioning: 'Creator · Builder · Writer',
   title: 'SAY — Sayem Quadri',
-  tagline: 'Ideas into Creations.',
-  ethos: 'IDEAS INTO CREATIONS.',
+  tagline: 'Work by Sayem Quadri',
+  ethos: 'SAY · SAYEM QUADRI',
 } as const;
 
 export const ORBITAL_DESTINATIONS: OrbitalDestination[] = [
@@ -162,8 +100,8 @@ export const ORBITAL_DESTINATIONS: OrbitalDestination[] = [
     id: 'work',
     index: '01',
     code: 'WORK',
-    label: 'Portfolio Archive',
-    subtitle: 'Design, technology, engineering, writing & voice work',
+    label: 'Projects & Work',
+    subtitle: 'Applications, prototypes, engineering research and writing',
     href: '#work',
     featured: true,
     rxFactor: 1.08,
@@ -176,8 +114,8 @@ export const ORBITAL_DESTINATIONS: OrbitalDestination[] = [
     id: 'creative',
     index: '02',
     code: 'CREATIVE',
-    label: 'Creative Expression',
-    subtitle: 'Voice dubbing, fiction, film analysis & presentations',
+    label: 'Creative Work',
+    subtitle: 'Novels, voice acting, content and presentations',
     href: '#creative',
     rxFactor: 1.15,
     ryFactor: 1.0,
@@ -188,9 +126,9 @@ export const ORBITAL_DESTINATIONS: OrbitalDestination[] = [
   {
     id: 'experiments',
     index: '03',
-    code: 'EXPERIMENTS',
-    label: 'Playground & Probes',
-    subtitle: 'Informal prototypes & unfinished explorations',
+    code: 'PROCESS',
+    label: 'How I Work',
+    subtitle: 'Research, AI-assisted production and refinement',
     href: '#experiments',
     rxFactor: 1.06,
     ryFactor: 0.99,
@@ -202,8 +140,8 @@ export const ORBITAL_DESTINATIONS: OrbitalDestination[] = [
     id: 'about',
     index: '04',
     code: 'ABOUT',
-    label: 'The Story of SAY',
-    subtitle: 'Curiosity, multidisciplinary craft & origin',
+    label: 'About Sayem',
+    subtitle: 'The origin of SAY and the work behind it',
     href: '#about',
     rxFactor: 1.17,
     ryFactor: 0.96,
@@ -215,8 +153,8 @@ export const ORBITAL_DESTINATIONS: OrbitalDestination[] = [
     id: 'contact',
     index: '05',
     code: 'CONTACT',
-    label: 'Collaborations & Inquiries',
-    subtitle: 'Direct channels for client, creative & research work',
+    label: 'Get in touch',
+    subtitle: 'Client work, collaborations and other inquiries',
     href: '#contact',
     rxFactor: 1.11,
     ryFactor: 1.03,
@@ -227,567 +165,349 @@ export const ORBITAL_DESTINATIONS: OrbitalDestination[] = [
 ];
 
 export const HERO_CONTENT = {
-  eyebrow: 'SAY · MULTIDISCIPLINARY CREATOR, RESEARCHER & BUILDER',
-  headlineLines: ['Curiosity has no', 'single discipline.'],
+  eyebrow: 'SAY · SAYEM QUADRI',
+  headlineLines: ['I build web apps,', 'write stories, and present ideas.'],
   introduction:
-    "I'm Sayem — a multidisciplinary creator, researcher and builder exploring the intersection of technology, design, engineering and storytelling.",
+    "I'm Sayem Quadri. My work includes digital products, interface design, engineering research, technical reports, fiction, video scripts, presentations and anime dubbing. SAY is the name I use across those different kinds of work.",
   primaryCta: {
-    label: 'Explore My Work',
+    label: 'See my work',
     href: '#work',
   },
   secondaryCta: {
-    label: 'More About Me',
+    label: 'About Sayem',
     href: '#about',
   },
 } as const;
 
 export const WORK_SECTION_CONTENT = {
-  indexLabel: '01 · Work Archive',
-  heading: 'Complete Portfolio Archive.',
+  indexLabel: '01 · Work',
+  heading: 'Projects and work.',
   supportingText:
-    'Selected projects, independent creations, technical builds, writing, voice work, and early studies organized across seven disciplines.',
+    'A record of applications, prototypes, technical research and finished creative work. Each entry states what I did and what stage it has reached.',
 } as const;
 
-export const WORK_CATEGORIES: { id: WorkCategory; label: string; shortLabel: string }[] = [
-  { id: 'all', label: 'All Work', shortLabel: 'All' },
-  {
-    id: 'Design & Digital Experiences',
-    label: 'Design & Digital Experiences',
-    shortLabel: 'Design & UX',
-  },
-  {
-    id: 'Development & Technology',
-    label: 'Development & Technology',
-    shortLabel: 'Development',
-  },
+export const WORK_CATEGORIES: {
+  id: WorkCategory;
+  label: string;
+  shortLabel: string;
+}[] = [
+  { id: 'all', label: 'All work', shortLabel: 'All' },
+  { id: 'Build & Design', label: 'Build & Design', shortLabel: 'Build' },
   {
     id: 'Research & Engineering',
     label: 'Research & Engineering',
-    shortLabel: 'Engineering',
+    shortLabel: 'Research',
   },
-  {
-    id: 'Writing & Storytelling',
-    label: 'Writing & Storytelling',
-    shortLabel: 'Writing',
-  },
-  {
-    id: 'Voice, Dubbing & Narration',
-    label: 'Voice, Dubbing & Narration',
-    shortLabel: 'Voice & Dubbing',
-  },
-  {
-    id: 'Presentations & Communication',
-    label: 'Presentations & Communication',
-    shortLabel: 'Presentations',
-  },
-  {
-    id: 'Experiments & Explorations',
-    label: 'Experiments & Explorations',
-    shortLabel: 'Experiments',
-  },
+  { id: 'Writing & Media', label: 'Writing & Media', shortLabel: 'Creative' },
 ];
 
 export const PROJECTS: ProjectItem[] = [
   {
-    id: 'say-orbital-system',
-    index: '01',
-    title: 'SAY — Personal Ecosystem & Orbital Web Architecture',
-    category: 'Design & Digital Experiences',
-    description:
-      'Designed and built the SAY personal digital identity uniting purple orbital iconography, an interactive 3D constellation portrait, and editorial archive flows.',
-    highlights: [
-      'Geometric SAY brand identity & purple orbital palette',
-      'Live WebGL line-and-dot portrait paired with orbital navigation',
-      'Editorial typography & accessible multi-discipline showcase',
-    ],
-    status: 'COMPLETED',
-    motif: 'say-orbit',
-    caseStudy: {
-      overview:
-        'A bespoke web environment built around the SAY personal brand, integrating custom geometric mark work, a WebGL wireframe constellation portrait, and a structured multidisciplinary portfolio.',
-      objective:
-        'Present technology, engineering, design, storytelling, and voice work together under one cohesive identity rather than splitting them across disconnected profiles.',
-      approach:
-        'Paired deep charcoal surfaces and restrained purple orbital accents with hardware-accelerated Three.js line geometry and clear semantic navigation.',
-      contribution:
-        'Brand direction, UI/UX layout, orbital navigation system, frontend engineering, and interactive creative showcases.',
-      technologies: ['React', 'TypeScript', 'Three.js', 'Tailwind CSS', 'Motion'],
-      visualNote:
-        'Live Production Experience — Interactive orbital architecture and visual language currently running on this site.',
-      isConceptualMedia: false,
-      mediaAttachments: [
-        {
-          kind: 'link',
-          label: 'Interactive 3D Portrait Stage',
-          note: 'Live WebGL geometry running in the Home viewport.',
-        },
-      ],
-    },
-  },
-  {
     id: 'derote',
-    index: '02',
+    index: '01',
     title: 'DeRote Student Insight System',
-    category: 'Development & Technology',
+    category: 'Build & Design',
     description:
-      'A student profiling and insight assessment web application structured for clear onboarding, questionnaires, and administrative reporting.',
+      'A student-profile and questionnaire application independently conceived and built for an educational setting at my HOD’s request.',
     highlights: [
-      'Structured onboarding & student profiling flows',
-      'Questionnaire-driven insight evaluation',
-      'Firebase synchronization & reporting views',
+      'Product concept, interface and application developed independently',
+      'Firestore, authentication, hosting and custom-domain setup',
+      'Deployed and currently in testing and refinement',
     ],
-    status: 'IN PROGRESS',
-    motif: 'derote',
+    status: 'DEPLOYED · TESTING',
     caseStudy: {
       overview:
-        'A web application designed to organize student profile intake, structured assessment questionnaires, and clear reporting inside a single coherent workspace.',
-      objective:
-        'Replace scattered spreadsheet and form workflows with an approachable, data-consistent assessment platform.',
-      approach:
-        'Built modular React views connected to Firebase data persistence so profile capture, questionnaire logic, and review dashboards stay synchronized.',
+        'An application for collecting student profiles and questionnaire responses and reviewing the resulting information through an administrative workflow.',
       contribution:
-        'Product architecture, interface engineering, questionnaire state modeling, and database workflow setup.',
-      technologies: ['React', 'TypeScript', 'Firebase', 'UI Architecture'],
-      visualNote:
-        'Interface Preview Placeholder — Live application screenshots and walkthrough clips can be attached here once prepared.',
-      isConceptualMedia: true,
-      mediaAttachments: [
-        {
-          kind: 'image',
-          label: 'Assessment Flow Screenshots',
-          note: 'Placeholder slot ready for interface captures.',
-        },
-        {
-          kind: 'video',
-          label: 'Walkthrough Screen Recording',
-          note: 'Placeholder slot ready for demo video clip.',
-        },
+        'I independently conceptualized, designed and developed the application. While building it, I learned and implemented the database layer, Cloud Firestore, authentication, Firebase Hosting and custom-domain setup. I continue to refine the interface and user experience during testing.',
+      statusNote:
+        'The application is deployed. Testing and refinement are ongoing; it is not presented as a fully launched production platform.',
+      technologies: [
+        'Google AI Studio',
+        'Firebase Authentication',
+        'Cloud Firestore',
+        'Firebase Hosting',
+        'Custom domain',
       ],
     },
   },
   {
-    id: 'ev-engineering',
-    index: '03',
-    title: 'EV Subsystem & Mobility Architecture Study',
-    category: 'Research & Engineering',
+    id: 'clinic-website',
+    index: '02',
+    title: 'Clinic Website Prototype',
+    category: 'Build & Design',
     description:
-      'An independent engineering study examining electric vehicle subsystem layout, mechanical packaging, and practical mobility constraints.',
+      'My first vibe-coded website: a practice prototype with responsive layouts, working navigation and interactive buttons.',
     highlights: [
-      'Electric vehicle architecture investigation',
-      'Mechanical & structural packaging analysis',
-      'First-principles technical documentation',
+      'First AI-assisted website build',
+      'Responsive page layouts',
+      'Working navigation and buttons',
     ],
-    status: 'INDEPENDENT WORK',
-    motif: 'ev',
+    status: 'COMPLETED · PRACTICE BUILD',
     caseStudy: {
       overview:
-        'Technical research and engineering exploration focused on how structural packaging, drivetrain layout, and practical mechanical constraints govern electric mobility designs.',
-      objective:
-        'Build grounded intuition around EV subsystem trade-offs through systematic documentation rather than surface-level specs.',
-      approach:
-        'Decomposed layout considerations, structural loads, and component placement into annotated engineering study notes.',
+        'A functional clinic website prototype I built as a practice project while learning how to create and connect website interfaces.',
       contribution:
-        'Technical research, subsystem breakdown, mechanical layout exploration, and structured documentation.',
-      technologies: ['Mechanical Systems', 'EV Architecture', 'Technical Documentation'],
-      visualNote:
-        'Engineering Schematic Frame — Supplied CAD renders, diagrams, and technical briefs can be linked here when published.',
-      isConceptualMedia: true,
-      mediaAttachments: [
-        {
-          kind: 'image',
-          label: 'Packaging Layout Schematics',
-          note: 'Placeholder slot for CAD drawings and diagrams.',
-        },
-      ],
-    },
-  },
-  {
-    id: 'the-green-string',
-    index: '04',
-    title: 'The Green String',
-    category: 'Writing & Storytelling',
-    description:
-      'A long-form literary novel and independent personal publishing project exploring continuity, memory, and human turning points.',
-    highlights: [
-      'Original long-form literary manuscript',
-      'Character interiority & deliberate editorial pacing',
-      'Independent book identity & publishing preparation',
-    ],
-    status: 'IN PROGRESS',
-    motif: 'green-string',
-    caseStudy: {
-      overview:
-        'An original long-form literary narrative crafted slowly around memory, perspective, and the quiet threads linking defining moments across time.',
-      objective:
-        'Shape a sustained piece of fiction treated with equal care in prose craft, thematic arc, and editorial presentation.',
-      approach:
-        'Drafting and revising iteratively with emphasis on restraint, atmospheric voice, and structural cohesion.',
-      contribution:
-        'Authoring, narrative architecture, manuscript editing, and visual edition concept.',
-      technologies: ['Long-Form Fiction', 'Narrative Structure', 'Editorial Direction'],
-      visualNote:
-        'Manuscript & Cover Concept Frame — Final cover artwork and reading excerpts will populate as chapters lock.',
-      isConceptualMedia: true,
-      mediaAttachments: [
-        {
-          kind: 'image',
-          label: 'Edition Cover Plate',
-          note: 'Placeholder for final typography and cover design.',
-        },
-      ],
-    },
-  },
-  {
-    id: 'anime-dubbing-reels',
-    index: '05',
-    title: 'Anime Dubbing & Character Voicework',
-    category: 'Voice, Dubbing & Narration',
-    description:
-      'Expressive vocal performances, anime scene dubs, and dramatic narration studies focusing on emotional range and lip-sync timing.',
-    highlights: [
-      'Character voice adaptation & dramatic range',
-      'Tight dialogue timing & breathing cadence',
-      'Clean spoken narration & tone modulation',
-    ],
-    status: 'INDEPENDENT WORK',
-    motif: 'voice-reel',
-    caseStudy: {
-      overview:
-        'A body of independent voiceover and anime dubbing practice translating dramatic pacing, emotional inflection, and vocal presence into crisp recorded performances.',
-      objective:
-        'Deliver natural, emotionally believable vocal reads that match scene rhythm and character psychology without overacting.',
-      approach:
-        'Script breakdown by emotional beat, breath timing rehearsal, and clean close-mic vocal delivery.',
-      contribution:
-        'Voice acting, dialogue adaptation, timing sync, and vocal recording.',
-      technologies: ['Voice Acting', 'Anime Dubbing', 'Audio Pacing', 'Narration'],
-      visualNote:
-        'Audio Showcase Slot — Sample dubbing takes and voice reels are showcased inside Creative Expression and ready for direct audio uploads.',
-      isConceptualMedia: true,
-      mediaAttachments: [
-        {
-          kind: 'audio',
-          label: 'Anime Dubbing & Narration Reel',
-          note: 'Interactive audio showcase slots available in Creative Expression.',
-        },
-        {
-          kind: 'video',
-          label: 'Dubbed Scene Clips',
-          note: 'Placeholder slot ready for synced scene video links.',
-        },
-      ],
-    },
-  },
-  {
-    id: 'aq-explains',
-    index: '06',
-    title: 'AQ Explains — Explanatory Decks & Stories',
-    category: 'Presentations & Communication',
-    description:
-      'An independent science and technology storytelling initiative pairing visual presentations, scripted clarity, and realistic what-if inquiries.',
-    highlights: [
-      'First-principles breakdown of complex mechanisms',
-      'Structured visual slide & story beat flow',
-      'Audience-ready explanations without jargon overload',
-    ],
-    status: 'INDEPENDENT WORK',
-    motif: 'aq-explains',
-    caseStudy: {
-      overview:
-        'Explanatory storytelling and presentation work under AQ Explains, turning dense scientific and technical mechanisms into intuitive, visually grounded narratives.',
-      objective:
-        'Bridge deep curiosity and public clarity so non-specialists can grasp real physical constraints and technical trade-offs.',
-      approach:
-        'Anchor each topic on one concrete question, strip unnecessary jargon, and align spoken cadence with visual beats.',
-      contribution:
-        'Research, scriptwriting, presentation structuring, visual framing, and narration.',
-      technologies: ['Science Communication', 'Presentation Design', 'Scriptwriting', 'Visual Storytelling'],
-      visualNote:
-        'Episode & Deck Frame — Visual slides, thumbnails, and video links will attach here as episodes publish.',
-      isConceptualMedia: true,
-      mediaAttachments: [
-        {
-          kind: 'video',
-          label: 'Episode Reel Slot',
-          note: 'Ready for published video URL or MP4 embed.',
-        },
+        'I built the prototype, worked through its page structure and interaction flow, and made the layouts responsive. It was an independent learning project, not a paid commission, and I did not present it to the clinic.',
+      statusNote:
+        'Completed as a practice prototype. It was not commissioned, delivered to, or used by the clinic.',
+      technologies: [
+        'AI-assisted development',
+        'Responsive layouts',
+        'Navigation and interaction design',
       ],
     },
   },
   {
     id: 'campus-connect',
-    index: '07',
-    title: 'Campus Connect',
-    category: 'Design & Digital Experiences',
+    index: '03',
+    title: 'CampusConnect',
+    category: 'Build & Design',
     description:
-      'A digital experience concept streamlining institutional communication through low-noise classroom and faculty availability signals.',
+      'A product concept for clearer communication between students, teachers and campus administration, developed as a UI/UX design and clickable prototype.',
     highlights: [
-      'Real-time room & availability signal modeling',
-      'Minimalist notification state hierarchy',
-      'Friction-free student-faculty status flow',
+      'Product concept and interface designed independently',
+      'Student, teacher and administration flows',
+      'Clickable prototype built in Google AI Studio',
     ],
-    status: 'EXPERIMENTAL',
-    motif: 'campus',
+    status: 'PROTOTYPE COMPLETED',
     caseStudy: {
       overview:
-        'A product and interface exploration addressing everyday scheduling uncertainty inside campuses via concise availability notifications.',
-      objective:
-        'Replace fragmented updates with clear, glanceable status transitions that minimize notification fatigue.',
-      approach:
-        'Modeled compact status states (Session Open, Moved, Deferred) and designed an uncluttered interface language around them.',
+        'A proposed communication platform for educational institutions. The concept covers class-status updates, announcements and separate student and teacher experiences.',
       contribution:
-        'UX architecture, state modeling, visual system design, and interactive prototype.',
-      technologies: ['UX Systems', 'Interface Prototyping', 'State Modeling'],
-      visualNote:
-        'Interactive Prototype Available — Test the live notification state simulator inside the Experiments section.',
-      isConceptualMedia: true,
+        'I developed the product concept, designed the user experience and interface, and created the clickable prototype using Google AI Studio.',
+      statusNote:
+        'This is a UI/UX design and clickable prototype. It is not a deployed application; live notifications, server workflows and backend functionality are not implemented.',
+      technologies: [
+        'Google AI Studio',
+        'Product conceptualization',
+        'UI/UX design',
+        'Clickable prototyping',
+      ],
     },
   },
   {
-    id: 'vibe-coding-prototypes',
-    index: '08',
-    title: 'AI-Assisted Web Prototypes (Vibe Coding)',
-    category: 'Development & Technology',
+    id: 'solar-ev',
+    index: '04',
+    title: 'Solar-Charged EV Conversion',
+    category: 'Research & Engineering',
     description:
-      'Rapid web applications and functional interface explorations built through AI-assisted workflows, prompt systems, and iterative TypeScript craft.',
+      'A batch-level engineering project for which I independently completed the technical research, calculations and documentation groundwork.',
     highlights: [
-      'Rapid concept-to-prototype web builds',
-      'AI-assisted workflow & architectural iteration',
-      'Component systems focused on speed & polish',
+      'Research into motor, controller, battery and solar requirements',
+      'Technical calculations and design justification',
+      'Project proposal and detailed calculation report prepared',
     ],
-    status: 'EXPERIMENTAL',
-    motif: 'ai-proto',
+    status: 'RESEARCH & DOCUMENTATION COMPLETE',
     caseStudy: {
       overview:
-        'An ongoing stream of rapid web experiments and digital utilities created by combining AI-assisted coding workflows with hands-on product direction and UI refinement.',
-      objective:
-        'Compress the distance between an abstract idea and a testable interactive build while preserving code quality and restraint.',
-      approach:
-        'Iterate rapidly on layout geometry, interaction flows, and clean state boundaries rather than over-engineering upfront.',
+        'A college engineering project proposing the integration of solar charging and a battery system into an existing four-wheeler electric vehicle.',
       contribution:
-        'Product ideation, prompt-driven rapid prototyping, UI editing, and deployment architecture.',
-      technologies: ['AI-Assisted Dev', 'Vibe Coding', 'React', 'TypeScript', 'Vite'],
-      visualNote:
-        'Prototype Archive — Individual micro-tools and web experiments are documented and testable in Experiments.',
-      isConceptualMedia: true,
+        'My individual contribution was the research and development groundwork and the complete technical documentation. I researched and checked the motor, controller, battery, solar-panel and charging-system requirements, completed the calculations, and prepared the project proposal and technical calculation/design-justification report.',
+      statusNote:
+        'My research and documentation handoff is complete. Vehicle procurement, assembly and testing were still pending when this portfolio entry was prepared; the vehicle is not described as built or tested.',
+      technologies: [
+        'EV systems research',
+        'Battery sizing calculations',
+        'Solar PV sizing',
+        'MPPT charging architecture',
+        'Technical documentation',
+      ],
     },
   },
   {
-    id: 'celestial-wireframe-study',
-    index: '09',
-    title: 'Celestial Wireframe Reconstruction Engine',
-    category: 'Experiments & Explorations',
+    id: 'green-string',
+    index: '05',
+    title: 'The Green String',
+    category: 'Writing & Media',
     description:
-      'A computational geometry and shader experiment extracting ordered 3D wireframe constellations directly from hand-drawn ink artwork.',
+      'A completed original novel manuscript by Sayem Quadri. The book has not yet been published.',
     highlights: [
-      'Chamfer distance transform & Zhang-Suen thinning',
-      'Shallow 3D multi-plane depth stratification',
-      'Custom GLSL star glow & hover luminescence',
+      'Full manuscript completed',
+      'Original long-form fiction',
+      'Unpublished and available for publication',
     ],
-    status: 'COMPLETED',
-    motif: 'constellation',
+    status: 'COMPLETED · UNPUBLISHED',
     caseStudy: {
       overview:
-        'Custom in-browser computer-vision and WebGL pipeline reconstructing an exact line-and-dot drawing into a floating 3D star sculpture.',
-      objective:
-        'Preserve 100% of the source illustration’s facial geometry and dot positions while giving it genuine spatial depth and calm astronomical motion.',
-      approach:
-        'Detected circular dot vertices via resolution-adaptive distance transforms prior to 1px stroke thinning and Ramer-Douglas-Peucker polyline tracing.',
+        'The Green String is a completed, original novel manuscript. It has not been published or released.',
       contribution:
-        'Algorithm design, custom GLSL vertex/fragment shaders, reduced-motion static raster fallback, and unit tests.',
-      technologies: ['Three.js', 'GLSL Shaders', 'Image Processing', 'TypeScript'],
-      visualNote:
-        'Live Technical Study — Actively rendering in the Home viewport with pointer parallax and hover light response.',
-      isConceptualMedia: false,
+        'Written by Sayem Quadri.',
+      statusNote:
+        'Manuscript complete. Unpublished. No public synopsis or reading excerpt is being displayed until the author supplies text intended for publication.',
+      technologies: ['Novel writing', 'Long-form fiction'],
+    },
+  },
+  {
+    id: 'content-creation',
+    index: '06',
+    title: 'Short-form Content Creation',
+    category: 'Writing & Media',
+    description:
+      'A short publishing experiment across multiple channels, combining topic research, information checking, scriptwriting and explanatory storytelling.',
+    highlights: [
+      'Research, information checking and scriptwriting handled by me',
+      'Around two weeks of content creation',
+      'Approximately 50,000 combined views and 100 subscribers reported across channels',
+    ],
+    status: 'PAUSED · HISTORICAL WORK',
+    caseStudy: {
+      overview:
+        'I created content across multiple channels, including anime-related and educational material. I handled topic research, information gathering and checking, scriptwriting, story structure and the explanations presented to viewers.',
+      contribution:
+        'Research, scriptwriting, narrative structure and explanatory development.',
+      statusNote:
+        'The channels are paused. The approximately 50,000 combined views and 100 subscribers are figures I reported from the period; they are not currently linked to public analytics screenshots and should be treated as self-reported.',
+      technologies: [
+        'Content research',
+        'Scriptwriting',
+        'Story structure',
+        'Science communication',
+      ],
     },
   },
 ];
 
 export const CREATIVE_ARCHIVE = {
-  indexLabel: '02 · Creative Expression',
-  heading: 'Beyond the Build.',
+  indexLabel: '02 · Creative work',
+  heading: 'Work beyond the screen.',
   supportingText:
-    'A dedicated studio for voice acting, anime dubbing, long-form fiction, narrative analysis, and expressive visual communication.',
+    'Writing, voice performance, content and presentations are part of my work too. This section records the formats I have worked in without inventing samples that are not ready to share.',
   voiceSection: {
-    label: 'Voice, Dubbing & Narration',
-    title: 'Vocal Performance & Timing',
+    label: 'Anime dubbing & voice acting',
+    title: 'Character dialogue and voice performance',
     summary:
-      'Exploring character psychology, dramatic cadence, and explanatory clarity through anime dubbing, voiceovers, and narrated storytelling.',
-    tracks: [
-      {
-        id: 'anime-dub-dramatic',
-        code: 'TAKE 01',
-        title: 'Anime Scene Dub — Confrontation Beat',
-        category: 'Anime Dubbing · Character Voice',
-        durationLabel: '0:24',
-        audioUrl: '',
-        directionNote: 'Controlled low register shifting into sharp resolve; tight lip-flap cadence.',
-        scriptLine:
-          '"You still think hesitation keeps anyone safe? Look closely—the moment you stop moving, the world decides for you."',
-        placeholderNote: 'Studio placeholder — attach .mp3 or .wav vocal take URL when ready.',
-      },
-      {
-        id: 'narration-aq',
-        code: 'TAKE 02',
-        title: 'AQ Explains — Opening Hook Read',
-        category: 'Narration · Science & What-If',
-        durationLabel: '0:32',
-        audioUrl: '',
-        directionNote: 'Warm, curious pacing with clean pauses around physical cause-and-effect beats.',
-        scriptLine:
-          '"What happens when a small design rule scales by ten thousand? Most failures look sudden—but the physics warned us long before."',
-        placeholderNote: 'Studio placeholder — attach narrated audio clip URL when published.',
-      },
-      {
-        id: 'monologue-literary',
-        code: 'TAKE 03',
-        title: 'The Green String — Atmospheric Passage',
-        category: 'Voiceover · Literary Reading',
-        durationLabel: '0:28',
-        audioUrl: '',
-        directionNote: 'Unrushed, intimate spoken delivery letting silence carry emotional weight.',
-        scriptLine:
-          '"Some connections never announce themselves with noise. They simply hold quietly across years until you trace them back."',
-        placeholderNote: 'Studio placeholder — ready for chapter reading audio attachment.',
-      },
-    ] as VoiceTrack[],
+      'I have dubbed existing anime clips using my own voice and performed character dialogues. This is independent creative practice, not a claim of professional voice-acting credits.',
+    activities: [
+      'Dubbing existing anime clips with my own voice',
+      'Performing character dialogues and voice acting',
+    ],
+    sampleNote:
+      'I do not currently have a public audio sample attached to this portfolio.',
   },
   greenString: {
-    label: 'Creative Writing & Novel Development',
+    label: 'Novel writing',
     title: 'The Green String',
-    status: 'In Progress · Personal Publishing Project',
-    synopsis:
-      'A long-form literary work tracing memory, perspective, and the quiet continuity connecting pivotal moments across time. Crafted through deliberate prose and editorial restraint.',
-    writingNotes: [
-      'Conceived as an independent novel where tone, unspoken tension, and interiority carry equal weight to plot.',
-      'Approached holistically as both manuscript and editorial edition—attending closely to rhythm, chapter transitions, and visual symbolism.',
-    ],
-    readingSampleTitle: 'Excerpt Frame · Chapter Draft Note',
-    readingSample:
-      '"Memory rarely keeps things in order. It folds years next to minutes, tying two distant rooms together by nothing more than the color of light on a quiet evening."',
-    publishingNote:
-      'Manuscript drafting active. Final chapter excerpts and edition details will replace this preview frame when prepared.',
+    status: 'Completed · Unpublished',
+    description:
+      'The complete manuscript is finished. It has not yet been published.',
   },
-  storyAnalysis: {
-    label: 'Film & Anime Story Analysis',
-    title: 'Narrative Architecture Studies',
-    summary:
-      'Dissecting how framing, pacing, motif callbacks, and emotional restraint make visual stories linger long after the credits.',
-    studies: [
-      {
-        id: 'pacing-silence',
-        code: 'STUDY 01',
-        medium: 'Anime Direction',
-        title: 'Silence as Pacing Architecture',
-        thesis: 'Why holding an extra two seconds on an empty frame often carries more tension than ten lines of exposition.',
-        notes: [
-          'Breaks down scene transitions where ambient sound and negative space signal internal character shifts.',
-          'Applies shot-rhythm awareness directly back into dubbing timing and interactive UI pacing.',
-        ],
-      },
-      {
-        id: 'motif-callbacks',
-        code: 'STUDY 02',
-        medium: 'Cinema & Long-Form Fiction',
-        title: 'Visual Motifs & Thematic Echoes',
-        thesis: 'Tracking how recurring objects or colors accumulate emotional meaning across acts without explaining themselves aloud.',
-        notes: [
-          'Examines subtle setup-and-payoff structures in character-driven drama and serialized anime.',
-          'Feeds narrative discipline into both The Green String and visual presentation storytelling.',
-        ],
-      },
-    ] as StoryAnalysisItem[],
+  writing: {
+    label: 'Writing formats',
+    title: 'Writing across different formats',
+    items: [
+      'Long-form fiction and novels',
+      'Scripts for videos',
+      'Technical and research reports',
+      'Speeches and event scripts',
+    ],
+  },
+  contentCreation: {
+    label: 'Content creation',
+    title: 'Research-led video content',
+    description:
+      'For my channels, I handled the process from choosing and researching a topic to checking information, writing the script and shaping the explanation and story.',
+    metrics: [
+      { value: '≈50K', label: 'combined views reported across channels' },
+      { value: '≈100', label: 'subscribers reported across channels' },
+      { value: '≈2 weeks', label: 'period of content creation' },
+    ],
+    note:
+      'Figures are self-reported and combined across channels; analytics screenshots are not currently attached.',
   },
   presentations: {
-    label: 'Presentations & Communication',
-    title: 'Clarity-First Visual Decks',
+    label: 'Presentations & communication',
+    title: 'Presentation decks I created',
     summary:
-      'Translating technical concepts, product ideas, and narrative pitches into structured decks built to inform rather than overwhelm.',
+      'I created these decks using multiple AI models and learned how PowerPoint files are structured so I could direct the tools, inspect the output and refine the presentations.',
     items: [
       {
-        id: 'aq-deck-system',
-        code: 'DECK 01',
-        title: 'AQ Explains — Visual Beat & Script System',
-        audienceContext: 'General & technical curious audiences',
-        structureSummary:
-          'Question-led narrative flow moving from intuitive observation to governing physical constraints and real-world implications.',
+        id: 'planet',
+        title: 'Our Planet Is Dying',
+        slides: 20,
+        subject: 'Environment & climate',
+        description:
+          'A documentary-style briefing on human pressure on Earth systems, climate, oceans, biodiversity, pollution and possible responses.',
+        role:
+          'Deck created by me. The presentation includes speaker notes, data references and a chapter-by-chapter narrative. Facts and time-sensitive figures should be checked before public release.',
       },
       {
-        id: 'concept-pitch-framework',
-        code: 'DECK 02',
-        title: 'Product & Engineering Concept Framing',
-        audienceContext: 'Collaborators, reviewers & multidisciplinary teams',
-        structureSummary:
-          'High-contrast slide minimalism pairing one clear claim per frame with diagrams that show system trade-offs honestly.',
+        id: 'paytm',
+        title: 'Vijay Shekhar Sharma — Paytm Case Study',
+        slides: 14,
+        subject: 'Entrepreneurship',
+        description:
+          'A case study following the development of One97 and Paytm, its business expansion, IPO and later challenges.',
+        role:
+          'Deck created by me. The 2026 regulatory and company-status details need an accuracy review before public release.',
+      },
+      {
+        id: 'bev',
+        title: 'Battery Electric Vehicle (BEV)',
+        slides: 10,
+        subject: 'Engineering & technology',
+        description:
+          'An introductory technical presentation on BEV components, working principles, advantages, limitations and future developments.',
+        role:
+          'Deck created by me and presented with a co-presenter.',
       },
     ] as PresentationItem[],
   },
+  publicSpeaking: {
+    label: 'Public speaking',
+    title: 'College Freshers’ Party',
+    role: 'Co-host and anchor',
+    description:
+      'Represented the Mechanical Engineering Department as a co-host. My part covered welcoming and addressing college officials and hosting the programme segments conducted in their presence.',
+  },
 } as const;
 
-export const EXPERIMENTS_CONTENT = {
-  indexLabel: '03 · Experiments & Playground',
-  heading: 'Experiments.',
+export const PROCESS_CONTENT = {
+  indexLabel: '03 · How I work',
+  heading: 'How I approach a project.',
   supportingText:
-    'An informal playground distinct from finished builds—clearly separating functional prototypes from early proof-of-concepts and creative probes.',
+    'The sequence changes by project, but much of my work follows the same pattern: understand the subject, organize the information, make something testable, then review and explain it.',
+  steps: [
+    {
+      number: '01',
+      title: 'Research the subject',
+      description:
+        'Gather the information, constraints and requirements before settling on a direction.',
+    },
+    {
+      number: '02',
+      title: 'Structure the work',
+      description:
+        'Turn the brief or research into a clear product flow, report, script or presentation.',
+    },
+    {
+      number: '03',
+      title: 'Build a first version',
+      description:
+        'Create the application, prototype, document or deck that makes the idea concrete.',
+    },
+    {
+      number: '04',
+      title: 'Review and refine',
+      description:
+        'Check the result, improve the details and make the finished work understandable to someone else.',
+    },
+  ],
+  aiNote:
+    'I use AI models as tools in parts of my workflow. For presentation work, I learned how PowerPoint files are structured so I could direct the models more precisely, inspect what they produced and refine the result. I aim to describe my own contribution clearly rather than claim every generated implementation detail as work I wrote by hand.',
 } as const;
-
-export const EXPERIMENTS: ExperimentItem[] = [
-  {
-    id: 'celestial-wireframe',
-    index: '01',
-    name: 'Celestial Wireframe Portrait & Orbit',
-    explanation:
-      'Interactive 3D line-and-dot sculpture traced directly from a custom blueprint via Chamfer distance transform and GLSL shaders, paired with tilted orbital navigation.',
-    technologies: ['Three.js', 'WebGL / GLSL', 'React', 'TypeScript'],
-    status: 'PROTOTYPE',
-    demoKind: 'celestial-portrait',
-    note: 'Functional prototype running live on Home — responds to pointer tilt, touch drag, hover luminescence, and orbital waypoints.',
-  },
-  {
-    id: 'availability-pulse',
-    index: '02',
-    name: 'Campus Availability Signal Model',
-    explanation:
-      'An interface sandbox testing how classroom occupancy and faculty availability transitions can communicate clearly without notification clutter.',
-    technologies: ['React State Modeling', 'Interface Prototyping', 'Accessibility'],
-    status: 'PROTOTYPE',
-    demoKind: 'availability-pulse',
-    note: 'Functional UI state prototype modeling low-noise transitions for Campus Connect.',
-  },
-  {
-    id: 'kinetic-type-study',
-    index: '03',
-    name: 'Editorial Motion & Typography Probe',
-    explanation:
-      'Testing compositor-only transform/opacity curves paired with high-contrast serif-sans pairings and instant reduced-motion fallbacks.',
-    technologies: ['CSS Compositor Motion', 'Typography Systems', 'Reduced Motion'],
-    status: 'EXPERIMENTAL',
-    demoKind: 'kinetic-type',
-    note: 'Exploratory study calibrating calm motion cadence so typography leads without distraction.',
-  },
-  {
-    id: 'science-storyboard-grid',
-    index: '04',
-    name: 'What-If Script Beat Architecture',
-    explanation:
-      'A visual storyboard tool structuring scientific questions, governing constraints, and visual turning points before script recording.',
-    technologies: ['Narrative Grid', 'Script Formatting', 'Communication Flow'],
-    status: 'PROOF OF CONCEPT',
-    demoKind: 'script-storyboard',
-    note: 'Unfinished proof-of-concept exploring reusable episode beat cards for AQ Explains.',
-  },
-];
 
 export const ABOUT_CONTENT = {
-  indexLabel: '04 · About SAY',
-  heading: 'The Story Behind SAY.',
-  lead: 'I am curious about how things work, how ideas connect, and how to turn those ideas into something tangible.',
+  indexLabel: '04 · About Sayem',
+  heading: 'Why I use the name SAY.',
+  lead:
+    'SAY began with the first three letters of my name, Sayem. Around 12–13 years old, I started using it as a prefix for the interests I was exploring: SAY Gaming, SAY Design, SAY Anime, SAY Developer and SAY Animate.',
   originStory: {
     eyebrow: 'ORIGIN · AGE 12–13 TO PRESENT',
-    title: 'Why SAY?',
+    title: 'The name came before the portfolio.',
     paragraphs: [
-      'SAY began with the first three letters of my name, Sayem. Around 12–13 years old, I started attaching it as a personal prefix to every world I wanted to explore—SAY Gaming, SAY Design, SAY Anime, SAY Developer, SAY Animate.',
-      'Over time, it stopped being just a naming habit and became an overarching personal identity: a creative ecosystem built on curiosity and the freedom to cross boundaries without asking permission from a single job title.',
+      'SAY began with the first three letters of my name, Sayem. Around 12–13 years old, I started attaching it to whatever I was interested in at the time: SAY Gaming, SAY Design, SAY Anime, SAY Developer and SAY Animate.',
+      'I still use it. Now it is the name I put across the projects, writing and creative work I make.',
     ],
     prefixes: [
       'SAY Gaming',
@@ -798,98 +518,48 @@ export const ABOUT_CONTENT = {
     ],
   },
   philosophyParagraphs: [
-    'Rather than separating technical engineering from visual design, storytelling, or vocal performance, I treat each discipline as a different way of thinking through ideas and making them real.',
-    'One afternoon might mean debugging a React interface or researching electric vehicle packaging; the next might mean drafting a chapter of fiction, breaking down an anime scene, or stepping up to a microphone to bring dialogue to life.',
+    'My work has included building a student insight application, designing clickable prototypes, researching an EV conversion, writing a complete novel, creating video scripts and performing anime dialogue.',
+    'Some of these are finished projects; some are prototypes; some are creative experience without a public sample attached yet. I label them by their actual status and contribution.',
   ],
   disciplines: [
     {
-      id: 'tech-dev',
-      index: '01',
-      title: 'Technology & Development',
+      id: 'build',
+      title: 'Build & design',
       summary:
-        'Vibe coding, web applications, AI-assisted development, and rapid prototypes exploring emerging digital tools.',
-      highlights: [
-        'Web app architecture & interactive frontends',
-        'AI-assisted rapid prototyping & product iteration',
-        'Exploring emerging software & web graphics workflows',
-      ],
+        'I conceptualize, design and develop digital applications, websites and interface prototypes.',
+      evidence: 'DeRote · Clinic Website Prototype · CampusConnect',
     },
     {
-      id: 'design-visual',
-      index: '02',
-      title: 'Design & Visual Creativity',
+      id: 'research',
+      title: 'Research & engineering',
       summary:
-        'Graphic identity, interface systems, editorial layouts, and atmospheric digital experiences shaped with restraint.',
-      highlights: [
-        'Website, UI & interactive spatial navigation',
-        'Identity marks, typography & visual branding',
-        'Creative visual presentations & layout composition',
-      ],
+        'I work through technical requirements, calculations and documentation, including the research stage of an engineering project.',
+      evidence: 'Solar-Charged EV Conversion',
     },
     {
-      id: 'writing-story',
-      index: '03',
-      title: 'Writing & Storytelling',
+      id: 'creative',
+      title: 'Writing, voice & communication',
       summary:
-        'Long-form fiction, narrative architecture, scriptwriting, and structural story analysis across film and anime.',
-      highlights: [
-        'Novel writing & editorial pacing (The Green String)',
-        'Science & explanatory scriptwriting (AQ Explains)',
-        'Film & anime narrative deconstruction',
-      ],
-    },
-    {
-      id: 'voice-perf',
-      index: '04',
-      title: 'Voice & Performance',
-      summary:
-        'Anime dubbing, character voice adaptation, expressive narration, and timing-driven spoken delivery.',
-      highlights: [
-        'Character voice acting & anime dubbing sync',
-        'Explanatory & literary voiceover narration',
-        'Cadence, breath control & emotional range',
-      ],
-    },
-    {
-      id: 'research-eng',
-      index: '05',
-      title: 'Research & Engineering',
-      summary:
-        'First-principles thinking applied to mechanical systems, technical problem-solving, and structured documentation.',
-      highlights: [
-        'EV subsystem & physical packaging exploration',
-        'Systems decomposition & constraint analysis',
-        'Clear, verifiable technical writing',
-      ],
-    },
-    {
-      id: 'present-comm',
-      index: '06',
-      title: 'Presentations & Communication',
-      summary:
-        'Turning complex technical or abstract themes into clear visual narratives and confident spoken communication.',
-      highlights: [
-        'Narrative slide architecture & concept framing',
-        'Distilling dense research for broad audiences',
-        'Visual-verbal alignment in storytelling',
-      ],
+        'I write fiction, scripts, reports and event speeches, create presentations, dub anime clips and host live events.',
+      evidence:
+        'The Green String · Presentation decks · Anime dubbing · Event co-hosting',
     },
   ] as DisciplineItem[],
 } as const;
 
 export const CONTACT_CONTENT = {
   indexLabel: '05 · Contact',
-  headingLines: [
-    'Have an interesting idea?',
-    "Let's turn it into a creation.",
-  ],
-  note: 'Open to client engagements, freelance work, creative collaborations, voice/writing projects, and research partnerships.',
-  availabilityStatus: 'Available for new projects',
+  headingLines: ['Have a project in mind?', 'Tell me what you need.'],
+  note:
+    'My work spans websites and web apps, interface design, presentations, research and documentation, writing and content. Send me the brief and I will tell you clearly whether the scope is a good fit.',
+  availabilityStatus: 'Open to selected projects and collaborations',
   inquiryPresets: [
-    'Client / Freelance Project',
-    'Creative Collaboration',
-    'Research / Engineering',
-    'Voice / Writing Inquiry',
+    'Website / Web application',
+    'Design / UI/UX',
+    'Presentation / Pitch deck',
+    'Research / Technical documentation',
+    'Writing / Content',
+    'Other collaboration',
   ],
 } as const;
 

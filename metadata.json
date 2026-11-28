@@ -1,6 +1,12 @@
 {
   "name": "SAY — Sayem Quadri",
-  "description": "Ideas into Creations. Personal portfolio and creative ecosystem of Sayem Quadri — multidisciplinary creator, researcher, and builder.",
+  "description": "Personal portfolio of Sayem Quadri, documenting digital builds, engineering research, writing, presentations, voice work and creative projects.",
   "requestFramePermissions": [],
-  "majorCapabilities": []
+  "majorCapabilities": [
+    "Digital application and website development",
+    "UI/UX and clickable prototypes",
+    "Engineering research and technical documentation",
+    "Writing and content development",
+    "Presentation design and communication"
+  ]
 }
