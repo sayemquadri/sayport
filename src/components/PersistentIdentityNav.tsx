@@ -31,7 +31,7 @@ export function PersistentIdentityNav({
   onNavigateDestination,
 }: PersistentIdentityNavProps) {
   const [hoveredId, setHoveredId] = useState<DestinationId | null>(null);
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(true);
 
   if (!visible) {
     return null;
